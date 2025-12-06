@@ -169,6 +169,11 @@ export default function TaxiCallerIntegrationPage() {
       const response = await fetch(`${API_BASE_URL}/taxicaller/test`, {
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
       });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
       const data = await response.json();
       
       if (data.success) {
@@ -181,7 +186,7 @@ export default function TaxiCallerIntegrationPage() {
     } catch (err) {
       console.error("Error testing connection:", err);
       setConnectionStatus("failed");
-      setError("Failed to connect to TaxiCaller API");
+      setError(`Failed to connect to TaxiCaller API: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -197,6 +202,11 @@ export default function TaxiCallerIntegrationPage() {
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         }
       );
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
       const data = await response.json();
       
       if (data.success) {
@@ -206,7 +216,38 @@ export default function TaxiCallerIntegrationPage() {
       }
     } catch (err) {
       console.error("Error fetching account jobs:", err);
-      setError("Failed to fetch account jobs");
+      setError(`Failed to fetch account jobs: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
+  const importDriverLogons = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/taxicaller/reports/import-driver-shifts?startDate=${startDate}&endDate=${endDate}`,
+        {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setSuccess(`Loaded ${data.count} account jobs`);
+      } else {
+        setError(data.message || "Failed to fetch account jobs");
+      }
+    } catch (err) {
+      console.error("Error fetching account jobs:", err);
+      setError(`Failed to fetch account jobs: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -222,17 +263,22 @@ export default function TaxiCallerIntegrationPage() {
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         }
       );
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
       const data = await response.json();
       
       if (data.success) {
         setAccountJobs(data.data || []);
-        setSuccess(`Loaded ${data.count} account jobs`);
+        setSuccess(`Loaded ${data.count || (data.data || []).length} account jobs`);
       } else {
         setError(data.message || "Failed to fetch account jobs");
       }
     } catch (err) {
       console.error("Error fetching account jobs:", err);
-      setError("Failed to fetch account jobs");
+      setError(`Failed to fetch account jobs: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -248,17 +294,22 @@ export default function TaxiCallerIntegrationPage() {
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         }
       );
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
       const data = await response.json();
       
       if (data.success) {
         setDriverLogons(data.data || []);
-        setSuccess(`Loaded ${data.count} driver log entries`);
+        setSuccess(`Loaded ${data.count || (data.data || []).length} driver log entries`);
       } else {
         setError(data.message || "Failed to fetch driver logons");
       }
     } catch (err) {
       console.error("Error fetching driver logons:", err);
-      setError("Failed to fetch driver logons");
+      setError(`Failed to fetch driver logons: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -274,17 +325,22 @@ export default function TaxiCallerIntegrationPage() {
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         }
       );
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
       const data = await response.json();
       
       if (data.success) {
         setDriverJobs(data.data || []);
-        setSuccess(`Loaded ${data.count} driver jobs`);
+        setSuccess(`Loaded ${data.count || (data.data || []).length} driver jobs`);
       } else {
         setError(data.message || "Failed to fetch driver jobs");
       }
     } catch (err) {
       console.error("Error fetching driver jobs:", err);
-      setError("Failed to fetch driver jobs");
+      setError(`Failed to fetch driver jobs: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -300,6 +356,11 @@ export default function TaxiCallerIntegrationPage() {
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         }
       );
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
       const data = await response.json();
       
       if (data.success) {
@@ -310,7 +371,7 @@ export default function TaxiCallerIntegrationPage() {
       }
     } catch (err) {
       console.error("Error fetching summary:", err);
-      setError("Failed to fetch summary");
+      setError(`Failed to fetch summary: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -487,7 +548,7 @@ export default function TaxiCallerIntegrationPage() {
                     loadAccountJobs();
                     setCurrentTab(0);
                   } else if (dataType === "driver_logons") {
-                    fetchDriverLogons();
+                    importDriverLogons();
                     setCurrentTab(1);
                   } else if (dataType === "driver_jobs") {
                     fetchDriverJobs();
@@ -498,7 +559,7 @@ export default function TaxiCallerIntegrationPage() {
                 startIcon={<RefreshIcon />}
                 sx={{ height: "56px" }}
               >
-                Load Data
+                Import TaxiCaller Data
               </Button>
             </Grid>
           </Grid>
