@@ -1,0 +1,51 @@
+FareFlow App - File Manifest
+============================
+
+Root Files:
+- layout.js                    # App layout with navigation
+- page.js                      # Home page
+- middleware.js                # Auth middleware
+- globals.css                  # Global styles
+
+Lib:
+- lib/api.js                   # API utilities (auth, token management)
+
+Global Components:
+- components/GlobalNav.js      # Navigation bar
+
+Account Management Module:
+- account-management/page.js                              # Main page
+- account-management/hooks/useAccountManagement.js        # State management hook
+- account-management/utils/helpers.js                     # Helper functions
+- account-management/components/StatisticsCards.js        # Dashboard cards
+- account-management/components/index.js                  # Component exports
+
+Tabs:
+- account-management/components/tabs/CustomersTab.js      # Customers list
+- account-management/components/tabs/TripChargesTab.js    # Trip charges for customer
+- account-management/components/tabs/AllChargesTab.js     # All charges with pagination
+- account-management/components/tabs/InvoicesTab.js       # Invoice management
+- account-management/components/tabs/index.js             # Tab exports
+
+Dialogs:
+- account-management/components/dialogs/CustomerDialog.js           # Add/Edit customer
+- account-management/components/dialogs/ChargeDialog.js             # Add/Edit charge
+- account-management/components/dialogs/BulkEditConfirmDialog.js    # Confirm bulk edit
+- account-management/components/dialogs/InvoiceDetailsDialog.js     # View invoice (with print/PDF)
+- account-management/components/dialogs/GenerateInvoiceDialog.js    # Generate invoice
+- account-management/components/dialogs/RecordPaymentDialog.js      # Record payment
+- account-management/components/dialogs/index.js                    # Dialog exports
+
+Other Modules:
+- cabs/page.js                        # Cab management
+- drivers/page.js                     # Driver management
+- expenses/page.js                    # Expense tracking
+- financial-setup/page.js             # Financial configuration
+- shifts/page.js                      # Shift management
+- signin/page.js                      # Login page
+- taxicaller-integration/page.js      # TaxiCaller API integration (with filters)
+- token-check/page.js                 # Token verification
+- users/page.js                       # User management
+
+Total Files: 35+
+Total Directories: 15+
