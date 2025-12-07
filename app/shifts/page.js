@@ -36,7 +36,17 @@ import {
   ListItem,
   ListItemText,
   Divider,
+  CircularProgress,
 } from "@mui/material";
+import {
+  Timeline,
+  TimelineItem,
+  TimelineSeparator,
+  TimelineConnector,
+  TimelineContent,
+  TimelineDot,
+  TimelineOppositeContent,
+} from "@mui/lab";
 import {
   Add as AddIcon,
   SwapHoriz as TransferIcon,
@@ -48,6 +58,9 @@ import {
   Person,
   AttachMoney,
   Search as SearchIcon,
+  CheckCircle as CurrentIcon,
+  Person as PersonIcon,
+  AttachMoney as MoneyIcon,
 } from "@mui/icons-material";
 import { getCurrentUser } from "../lib/api";
 
@@ -68,7 +81,7 @@ export default function ShiftsPage() {
   // Filter states
   const [cabFilter, setCabFilter] = useState("");
   const [ownerFilter, setOwnerFilter] = useState("");
-  const [viewMode, setViewMode] = useState("by-cab"); // "by-cab" or "by-owner"
+  const [viewMode, setViewMode] = useState("by-cab");
   
   // Search states for lists
   const [cabSearchText, setCabSearchText] = useState("");
@@ -80,6 +93,8 @@ export default function ShiftsPage() {
   const [openHistoryDialog, setOpenHistoryDialog] = useState(false);
   const [selectedShift, setSelectedShift] = useState(null);
   const [ownershipHistory, setOwnershipHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
   
   // Tab state
   const [tabValue, setTabValue] = useState(0);
@@ -138,7 +153,13 @@ export default function ShiftsPage() {
 
       if (response.ok) {
         const data = await response.json();
-        setCabs(data);
+        // Sort cabs numerically by cab number
+        const sortedCabs = data.sort((a, b) => {
+          const numA = parseInt(a.cabNumber) || 0;
+          const numB = parseInt(b.cabNumber) || 0;
+          return numA - numB;
+        });
+        setCabs(sortedCabs);
       }
     } catch (err) {
       console.error("Error loading cabs:", err);
@@ -155,7 +176,6 @@ export default function ShiftsPage() {
 
       if (response.ok) {
         const data = await response.json();
-        // Filter only owner-drivers
         setDrivers(data.filter(d => d.isOwner));
       }
     } catch (err) {
@@ -209,23 +229,20 @@ export default function ShiftsPage() {
     }
   };
 
-  // Compute filtered shifts based on current filters
   const getFilteredShifts = () => {
     let filtered = [...shifts];
 
-    // Filter by cab if in owner view mode
     if (viewMode === "by-owner" && cabFilter) {
       filtered = filtered.filter(shift => 
-        shift.cabNumber.toLowerCase().includes(cabFilter.toLowerCase()) ||
-        shift.cabRegistration.toLowerCase().includes(cabFilter.toLowerCase())
+        (shift.cabNumber && shift.cabNumber.toLowerCase().includes(cabFilter.toLowerCase())) ||
+        (shift.cabRegistration && shift.cabRegistration.toLowerCase().includes(cabFilter.toLowerCase()))
       );
     }
 
-    // Filter by owner if in cab view mode
     if (viewMode === "by-cab" && ownerFilter) {
       filtered = filtered.filter(shift =>
-        shift.currentOwnerName.toLowerCase().includes(ownerFilter.toLowerCase()) ||
-        shift.currentOwnerDriverNumber.toLowerCase().includes(ownerFilter.toLowerCase())
+        (shift.currentOwnerName && shift.currentOwnerName.toLowerCase().includes(ownerFilter.toLowerCase())) ||
+        (shift.currentOwnerDriverNumber && shift.currentOwnerDriverNumber.toLowerCase().includes(ownerFilter.toLowerCase()))
       );
     }
 
@@ -234,29 +251,28 @@ export default function ShiftsPage() {
 
   const filteredShifts = getFilteredShifts();
 
-  // Filter cab list based on search
   const getFilteredCabs = () => {
     if (!cabSearchText) return cabs;
     
     const searchLower = cabSearchText.toLowerCase();
     return cabs.filter(cab =>
-      cab.cabNumber.toLowerCase().includes(searchLower) ||
-      cab.registrationNumber.toLowerCase().includes(searchLower) ||
-      cab.make.toLowerCase().includes(searchLower) ||
-      cab.model.toLowerCase().includes(searchLower)
+      (cab.cabNumber && cab.cabNumber.toLowerCase().includes(searchLower)) ||
+      (cab.registrationNumber && cab.registrationNumber.toLowerCase().includes(searchLower)) ||
+      (cab.make && cab.make.toLowerCase().includes(searchLower)) ||
+      (cab.model && cab.model.toLowerCase().includes(searchLower))
     );
   };
 
-  // Filter owner list based on search
   const getFilteredOwners = () => {
     if (!ownerSearchText) return drivers;
     
     const searchLower = ownerSearchText.toLowerCase();
     return drivers.filter(driver =>
-      driver.firstName.toLowerCase().includes(searchLower) ||
-      driver.lastName.toLowerCase().includes(searchLower) ||
-      driver.driverNumber.toLowerCase().includes(searchLower) ||
-      `${driver.firstName} ${driver.lastName}`.toLowerCase().includes(searchLower)
+      (driver.firstName && driver.firstName.toLowerCase().includes(searchLower)) ||
+      (driver.lastName && driver.lastName.toLowerCase().includes(searchLower)) ||
+      (driver.driverNumber && driver.driverNumber.toLowerCase().includes(searchLower)) ||
+      (driver.firstName && driver.lastName && 
+        `${driver.firstName} ${driver.lastName}`.toLowerCase().includes(searchLower))
     );
   };
 
@@ -280,7 +296,6 @@ export default function ShiftsPage() {
   };
 
   const handleShiftTypeChange = (newShiftType) => {
-    // Set default times based on shift type
     const defaults = {
       DAY: { startTime: "06:00", endTime: "18:00" },
       NIGHT: { startTime: "18:00", endTime: "06:00" },
@@ -372,9 +387,13 @@ export default function ShiftsPage() {
     }
   };
 
+  // ENHANCED: Beautiful history dialog with timeline
   const handleOpenHistoryDialog = async (shift) => {
     setSelectedShift(shift);
     setOpenHistoryDialog(true);
+    setHistoryLoading(true);
+    setHistoryError("");
+    setOwnershipHistory([]);
     
     try {
       const response = await fetch(`${API_BASE_URL}/shifts/${shift.id}/ownership-history`, {
@@ -386,9 +405,78 @@ export default function ShiftsPage() {
       if (response.ok) {
         const data = await response.json();
         setOwnershipHistory(data);
+      } else {
+        setHistoryError("Failed to load ownership history");
       }
     } catch (err) {
       console.error("Error loading history:", err);
+      setHistoryError("Failed to load ownership history");
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const handleCloseHistoryDialog = () => {
+    setOpenHistoryDialog(false);
+    setSelectedShift(null);
+    setOwnershipHistory([]);
+    setHistoryError("");
+  };
+
+  // Helper functions for history display
+  const formatCurrency = (amount) => {
+    if (!amount) return "N/A";
+    return `$${parseFloat(amount).toLocaleString("en-US", { 
+      minimumFractionDigits: 2, 
+      maximumFractionDigits: 2 
+    })}`;
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return "Present";
+    const date = new Date(dateString);
+    return date.toLocaleDateString("en-US", { 
+      year: "numeric", 
+      month: "short", 
+      day: "numeric" 
+    });
+  };
+
+  const getAcquisitionTypeColor = (type) => {
+    const colors = {
+      "INITIAL_ASSIGNMENT": "primary",
+      "PURCHASE": "success",
+      "TRANSFER": "info",
+      "INHERITANCE": "secondary",
+    };
+    return colors[type] || "default";
+  };
+
+  const getAcquisitionTypeLabel = (type) => {
+    const labels = {
+      "INITIAL_ASSIGNMENT": "Initial Assignment",
+      "PURCHASE": "Purchase",
+      "TRANSFER": "Transfer",
+      "INHERITANCE": "Inheritance",
+    };
+    return labels[type] || type;
+  };
+
+  const calculateDuration = (startDate, endDate) => {
+    const start = new Date(startDate);
+    const end = endDate ? new Date(endDate) : new Date();
+    const diffTime = Math.abs(end - start);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 30) {
+      return `${diffDays} day${diffDays !== 1 ? "s" : ""}`;
+    } else if (diffDays < 365) {
+      const months = Math.floor(diffDays / 30);
+      return `${months} month${months !== 1 ? "s" : ""}`;
+    } else {
+      const years = Math.floor(diffDays / 365);
+      const remainingMonths = Math.floor((diffDays % 365) / 30);
+      return `${years} year${years !== 1 ? "s" : ""}${remainingMonths > 0 ? `, ${remainingMonths} month${remainingMonths !== 1 ? "s" : ""}` : ""}`;
     }
   };
 
@@ -468,7 +556,14 @@ export default function ShiftsPage() {
         <Grid container spacing={3}>
           {/* Left Panel - Cab/Owner Selection */}
           <Grid item xs={12} md={4}>
-            <Paper sx={{ p: 2 }}>
+            <Paper sx={{ 
+              p: 2,
+              position: 'sticky',
+              top: 16,
+              maxHeight: 'calc(100vh - 32px)',
+              display: 'flex',
+              flexDirection: 'column'
+            }}>
               <Tabs
                 value={viewMode === "by-cab" ? 0 : 1}
                 onChange={(e, newValue) => {
@@ -492,7 +587,7 @@ export default function ShiftsPage() {
                     setOwnerSearchText("");
                   }
                 }}
-                sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}
+                sx={{ borderBottom: 1, borderColor: "divider", mb: 2, flexShrink: 0 }}
               >
                 <Tab label="By Cab" />
                 <Tab label="By Owner" />
@@ -500,35 +595,51 @@ export default function ShiftsPage() {
 
               {viewMode === "by-cab" ? (
                 <>
-                  <Typography variant="h6" sx={{ mb: 2, fontWeight: "bold" }}>
+                  <Typography variant="h6" sx={{ mb: 2, fontWeight: "bold", flexShrink: 0 }}>
                     Select Cab
                   </Typography>
                   
-                  {/* Search box for cabs */}
                   <TextField
                     placeholder="Search cabs..."
                     value={cabSearchText}
                     onChange={(e) => setCabSearchText(e.target.value)}
                     size="small"
                     fullWidth
-                    sx={{ mb: 2 }}
+                    sx={{ mb: 2, flexShrink: 0 }}
                     InputProps={{
                       startAdornment: <SearchIcon sx={{ mr: 1, color: "text.secondary" }} />,
                     }}
                   />
                   
                   {filteredCabs.length === 0 ? (
-                    <Alert severity="info" sx={{ mt: 2 }}>
+                    <Alert severity="info" sx={{ mt: 2, flexShrink: 0 }}>
                       No cabs match "{cabSearchText}"
                     </Alert>
                   ) : (
                     <>
                       {cabSearchText && (
-                        <Typography variant="caption" color="textSecondary" sx={{ mb: 1, display: "block" }}>
+                        <Typography variant="caption" color="textSecondary" sx={{ mb: 1, display: "block", flexShrink: 0 }}>
                           Showing {filteredCabs.length} of {cabs.length} cabs
                         </Typography>
                       )}
-                      <List>
+                      <List sx={{ 
+                        overflow: 'auto',
+                        flexGrow: 1,
+                        '&::-webkit-scrollbar': {
+                          width: '8px',
+                        },
+                        '&::-webkit-scrollbar-track': {
+                          backgroundColor: '#f1f1f1',
+                          borderRadius: '4px',
+                        },
+                        '&::-webkit-scrollbar-thumb': {
+                          backgroundColor: '#888',
+                          borderRadius: '4px',
+                          '&:hover': {
+                            backgroundColor: '#555',
+                          },
+                        },
+                      }}>
                         {filteredCabs.map((cab) => (
                           <ListItem
                             key={cab.id}
@@ -556,35 +667,51 @@ export default function ShiftsPage() {
                 </>
               ) : (
                 <>
-                  <Typography variant="h6" sx={{ mb: 2, fontWeight: "bold" }}>
+                  <Typography variant="h6" sx={{ mb: 2, fontWeight: "bold", flexShrink: 0 }}>
                     Select Owner
                   </Typography>
                   
-                  {/* Search box for owners */}
                   <TextField
                     placeholder="Search owners..."
                     value={ownerSearchText}
                     onChange={(e) => setOwnerSearchText(e.target.value)}
                     size="small"
                     fullWidth
-                    sx={{ mb: 2 }}
+                    sx={{ mb: 2, flexShrink: 0 }}
                     InputProps={{
                       startAdornment: <SearchIcon sx={{ mr: 1, color: "text.secondary" }} />,
                     }}
                   />
                   
                   {filteredOwners.length === 0 ? (
-                    <Alert severity="info" sx={{ mt: 2 }}>
+                    <Alert severity="info" sx={{ mt: 2, flexShrink: 0 }}>
                       No owners match "{ownerSearchText}"
                     </Alert>
                   ) : (
                     <>
                       {ownerSearchText && (
-                        <Typography variant="caption" color="textSecondary" sx={{ mb: 1, display: "block" }}>
+                        <Typography variant="caption" color="textSecondary" sx={{ mb: 1, display: "block", flexShrink: 0 }}>
                           Showing {filteredOwners.length} of {drivers.length} owners
                         </Typography>
                       )}
-                      <List>
+                      <List sx={{ 
+                        overflow: 'auto',
+                        flexGrow: 1,
+                        '&::-webkit-scrollbar': {
+                          width: '8px',
+                        },
+                        '&::-webkit-scrollbar-track': {
+                          backgroundColor: '#f1f1f1',
+                          borderRadius: '4px',
+                        },
+                        '&::-webkit-scrollbar-thumb': {
+                          backgroundColor: '#888',
+                          borderRadius: '4px',
+                          '&:hover': {
+                            backgroundColor: '#555',
+                          },
+                        },
+                      }}>
                         {filteredOwners.map((driver) => (
                           <ListItem
                             key={driver.id}
@@ -644,7 +771,6 @@ export default function ShiftsPage() {
                   )}
                 </Box>
 
-                {/* Filter Box for Owner View */}
                 {viewMode === "by-owner" && shifts.length > 0 && (
                   <Box sx={{ mb: 3 }}>
                     <TextField
@@ -666,7 +792,6 @@ export default function ShiftsPage() {
                   </Box>
                 )}
 
-                {/* Filter Box for Cab View */}
                 {viewMode === "by-cab" && shifts.length > 1 && (
                   <Box sx={{ mb: 3 }}>
                     <TextField
@@ -728,7 +853,6 @@ export default function ShiftsPage() {
 
                             <Divider sx={{ my: 2 }} />
 
-                            {/* Show cab info in owner view, owner info in cab view */}
                             {viewMode === "by-owner" ? (
                               <Box sx={{ mb: 2 }}>
                                 <Typography variant="subtitle2" color="textSecondary" gutterBottom>
@@ -807,7 +931,7 @@ export default function ShiftsPage() {
         </Grid>
       </Box>
 
-      {/* Create Shift Dialog */}
+      {/* Create Shift Dialog - (keeping your existing implementation) */}
       <Dialog open={openCreateDialog} onClose={() => setOpenCreateDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle>
           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -947,7 +1071,7 @@ export default function ShiftsPage() {
         </DialogActions>
       </Dialog>
 
-      {/* Transfer Ownership Dialog */}
+      {/* Transfer Ownership Dialog - (keeping your existing implementation) */}
       <Dialog open={openTransferDialog} onClose={() => setOpenTransferDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle>
           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -1064,86 +1188,185 @@ export default function ShiftsPage() {
         </DialogActions>
       </Dialog>
 
-      {/* Ownership History Dialog */}
-      <Dialog open={openHistoryDialog} onClose={() => setOpenHistoryDialog(false)} maxWidth="md" fullWidth>
-        <DialogTitle>
-          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <Typography variant="h6">Ownership History</Typography>
-            <IconButton onClick={() => setOpenHistoryDialog(false)}>
-              <CloseIcon />
-            </IconButton>
+      {/* ENHANCED: Beautiful Ownership History Dialog with Timeline */}
+      <Dialog 
+        open={openHistoryDialog} 
+        onClose={handleCloseHistoryDialog} 
+        maxWidth="md" 
+        fullWidth
+        PaperProps={{
+          sx: { minHeight: "400px" }
+        }}
+      >
+        <DialogTitle sx={{ 
+          display: "flex", 
+          justifyContent: "space-between", 
+          alignItems: "center",
+          borderBottom: 1,
+          borderColor: "divider"
+        }}>
+          <Box>
+            <Typography variant="h6">
+              Ownership History
+            </Typography>
+            {selectedShift && (
+              <Typography variant="subtitle2" color="text.secondary">
+                Cab: {selectedShift.cabNumber} • Shift: {selectedShift.shiftType}
+              </Typography>
+            )}
           </Box>
+          <IconButton onClick={handleCloseHistoryDialog} size="small">
+            <CloseIcon />
+          </IconButton>
         </DialogTitle>
-        <DialogContent dividers>
-          {selectedShift && (
-            <Alert severity="info" sx={{ mb: 2 }}>
-              {selectedShift.shiftTypeDisplay} - {selectedShift.cabNumber}
+
+        <DialogContent sx={{ mt: 2 }}>
+          {historyLoading && (
+            <Box display="flex" justifyContent="center" alignItems="center" minHeight="300px">
+              <CircularProgress />
+            </Box>
+          )}
+
+          {historyError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {historyError}
             </Alert>
           )}
 
-          {ownershipHistory.length === 0 ? (
-            <Typography color="textSecondary">No ownership history found.</Typography>
-          ) : (
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
-                    <TableCell><strong>Owner</strong></TableCell>
-                    <TableCell><strong>Period</strong></TableCell>
-                    <TableCell><strong>Type</strong></TableCell>
-                    <TableCell align="right"><strong>Acquired For</strong></TableCell>
-                    <TableCell align="right"><strong>Sold For</strong></TableCell>
-                    <TableCell><strong>Status</strong></TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {ownershipHistory.map((record) => (
-                    <TableRow key={record.id}>
-                      <TableCell>
-                        <Typography variant="body2" fontWeight="bold">
-                          {record.ownerName}
+          {!historyLoading && !historyError && ownershipHistory.length === 0 && (
+            <Alert severity="info">
+              No ownership history found for this shift.
+            </Alert>
+          )}
+
+          {!historyLoading && !historyError && ownershipHistory.length > 0 && (
+            <Timeline position="right">
+              {ownershipHistory.map((ownership, index) => (
+                <TimelineItem key={ownership.id}>
+                  <TimelineOppositeContent color="text.secondary" sx={{ flex: 0.3 }}>
+                    <Typography variant="body2" fontWeight="bold">
+                      {formatDate(ownership.startDate)}
+                    </Typography>
+                    <Typography variant="caption">
+                      {ownership.endDate ? `to ${formatDate(ownership.endDate)}` : "Present"}
+                    </Typography>
+                  </TimelineOppositeContent>
+
+                  <TimelineSeparator>
+                    <TimelineDot color={ownership.isCurrent ? "success" : "grey"}>
+                      {ownership.isCurrent ? <CurrentIcon /> : <PersonIcon />}
+                    </TimelineDot>
+                    {index < ownershipHistory.length - 1 && <TimelineConnector />}
+                  </TimelineSeparator>
+
+                  <TimelineContent>
+                    <Card variant="outlined" sx={{ mb: 2 }}>
+                      <CardContent>
+                        {/* Owner Info */}
+                        <Box display="flex" alignItems="center" gap={1} mb={1}>
+                          <PersonIcon color="action" fontSize="small" />
+                          <Typography variant="h6">
+                            {ownership.ownerName}
+                          </Typography>
+                          {ownership.isCurrent && (
+                            <Chip 
+                              label="Current Owner" 
+                              color="success" 
+                              size="small" 
+                            />
+                          )}
+                        </Box>
+
+                        <Typography variant="body2" color="text.secondary" gutterBottom>
+                          Driver #: {ownership.ownerDriverNumber}
                         </Typography>
-                        <Typography variant="caption" color="textSecondary">
-                          {record.ownerDriverNumber}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {record.startDate}
-                        </Typography>
-                        <Typography variant="caption" color="textSecondary">
-                          to {record.endDate || "Present"}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={record.acquisitionType?.replace("_", " ")} 
-                          size="small" 
-                          variant="outlined"
-                        />
-                      </TableCell>
-                      <TableCell align="right">
-                        {record.acquisitionPrice ? `$${record.acquisitionPrice.toLocaleString()}` : "-"}
-                      </TableCell>
-                      <TableCell align="right">
-                        {record.salePrice ? `$${record.salePrice.toLocaleString()}` : "-"}
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={record.isCurrent ? "Current" : "Ended"}
-                          color={record.isCurrent ? "success" : "default"}
-                          size="small"
-                        />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+
+                        <Divider sx={{ my: 1.5 }} />
+
+                        {/* Acquisition Details */}
+                        <Box display="flex" flexDirection="column" gap={1}>
+                          <Box display="flex" justifyContent="space-between" alignItems="center">
+                            <Typography variant="body2" color="text.secondary">
+                              Acquisition Type:
+                            </Typography>
+                            <Chip 
+                              label={getAcquisitionTypeLabel(ownership.acquisitionType)}
+                              color={getAcquisitionTypeColor(ownership.acquisitionType)}
+                              size="small"
+                            />
+                          </Box>
+
+                          {ownership.acquisitionPrice && (
+                            <Box display="flex" justifyContent="space-between" alignItems="center">
+                              <Typography variant="body2" color="text.secondary">
+                                <MoneyIcon fontSize="inherit" /> Acquisition Price:
+                              </Typography>
+                              <Typography variant="body2" fontWeight="medium" color="success.main">
+                                {formatCurrency(ownership.acquisitionPrice)}
+                              </Typography>
+                            </Box>
+                          )}
+
+                          {ownership.salePrice && (
+                            <Box display="flex" justifyContent="space-between" alignItems="center">
+                              <Typography variant="body2" color="text.secondary">
+                                <MoneyIcon fontSize="inherit" /> Sale Price:
+                              </Typography>
+                              <Typography variant="body2" fontWeight="medium" color="error.main">
+                                {formatCurrency(ownership.salePrice)}
+                              </Typography>
+                            </Box>
+                          )}
+
+                          {ownership.transferredToName && (
+                            <Box display="flex" justifyContent="space-between" alignItems="center">
+                              <Typography variant="body2" color="text.secondary">
+                                <TransferIcon fontSize="inherit" /> Transferred To:
+                              </Typography>
+                              <Typography variant="body2" fontWeight="medium">
+                                {ownership.transferredToName}
+                              </Typography>
+                            </Box>
+                          )}
+
+                          {ownership.notes && (
+                            <Box mt={1}>
+                              <Typography variant="caption" color="text.secondary">
+                                Notes:
+                              </Typography>
+                              <Typography variant="body2" sx={{ 
+                                bgcolor: "grey.50", 
+                                p: 1, 
+                                borderRadius: 1,
+                                fontStyle: "italic"
+                              }}>
+                                {ownership.notes}
+                              </Typography>
+                            </Box>
+                          )}
+                        </Box>
+
+                        {/* Duration Calculation */}
+                        {ownership.endDate && (
+                          <Box mt={1.5} pt={1.5} borderTop={1} borderColor="divider">
+                            <Typography variant="caption" color="text.secondary">
+                              Duration: {calculateDuration(ownership.startDate, ownership.endDate)}
+                            </Typography>
+                          </Box>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </TimelineContent>
+                </TimelineItem>
+              ))}
+            </Timeline>
           )}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenHistoryDialog(false)}>Close</Button>
+
+        <DialogActions sx={{ borderTop: 1, borderColor: "divider", px: 3, py: 2 }}>
+          <Button onClick={handleCloseHistoryDialog} variant="contained">
+            Close
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>
