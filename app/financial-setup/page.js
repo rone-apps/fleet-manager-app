@@ -322,8 +322,21 @@ export default function FinancialSetupPage() {
         setOpenPlanDialog(false);
         loadLeasePlans();
       } else {
-        const errorData = await response.json();
-        setError(errorData.error || "Failed to save plan");
+        // Safely handle error response - may not contain JSON
+        let errorMessage = "Failed to save plan";
+        try {
+          const contentType = response.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const errorData = await response.json();
+            errorMessage = errorData.error || errorData.message || errorMessage;
+          } else {
+            const errorText = await response.text();
+            errorMessage = errorText || `Error: ${response.status} ${response.statusText}`;
+          }
+        } catch (parseError) {
+          errorMessage = `Error: ${response.status} ${response.statusText}`;
+        }
+        setError(errorMessage);
       }
     } catch (err) {
       console.error("Error saving plan:", err);
@@ -442,8 +455,21 @@ export default function FinancialSetupPage() {
         setOpenRateDialog(false);
         loadLeaseRates(selectedPlan.id);
       } else {
-        const errorData = await response.json();
-        setError(errorData.error || "Failed to save rate");
+        // Safely handle error response - may not contain JSON
+        let errorMessage = "Failed to save rate";
+        try {
+          const contentType = response.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const errorData = await response.json();
+            errorMessage = errorData.error || errorData.message || errorMessage;
+          } else {
+            const errorText = await response.text();
+            errorMessage = errorText || `Error: ${response.status} ${response.statusText}`;
+          }
+        } catch (parseError) {
+          errorMessage = `Error: ${response.status} ${response.statusText}`;
+        }
+        setError(errorMessage);
       }
     } catch (err) {
       console.error("Error saving rate:", err);
