@@ -295,7 +295,7 @@ export default function HomePage() {
                 transition: 'transform 0.2s',
                 '&:hover': { transform: 'translateY(-4px)', boxShadow: 3 }
               }}
-              onClick={() => alert('Reports coming soon!')}
+                onClick={() => router.push('/reports')}
             >
               <CardContent>
                 <Assessment sx={{ fontSize: 40, color: '#3e5244', mb: 2 }} />
