@@ -6,9 +6,12 @@ import GlobalNav from "../components/GlobalNav";
 import {
   Box, Container, Typography, Button, Paper, Grid, TextField,
   Tabs, Tab, Autocomplete, Card, CardContent, CircularProgress,
+  Dialog, DialogTitle, DialogContent, DialogActions, Divider,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
 } from "@mui/material";
 import {
   Assessment, TrendingUp, TrendingDown, AccountBalance, CheckCircle,
+  Visibility, Download, Print, Email,
 } from "@mui/icons-material";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
@@ -33,6 +36,8 @@ export default function ReportsPage() {
   
   // ✅ ALL report data cached here - fetched ONCE
   const [reportData, setReportData] = useState(null);
+
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
 
   const getCurrentUser = async () => {
     try {
@@ -105,7 +110,7 @@ export default function ReportsPage() {
       console.log('🚀 Fetching ALL report data ONCE for driver:', selectedDriver.driverNumber);
 
       // ✅ Fetch ALL revenue and expense types in PARALLEL
-      const [leaseRevenueRes, creditCardRes, chargesRes, fixedExpensesRes] = 
+      const [leaseRevenueRes, creditCardRes, chargesRes, fixedExpensesRes, leaseExpenseRes, oneTimeExpensesRes] = 
         await Promise.allSettled([
           axios.get(`${API_BASE_URL}/reports/lease-revenue`, {
             params: { 
@@ -139,6 +144,21 @@ export default function ReportsPage() {
             },
             headers: { Authorization: `Bearer ${token}` },
           }),
+          axios.get(`${API_BASE_URL}/reports/lease-expense`, {
+            params: {
+              driverNumber: selectedDriver.driverNumber,
+              startDate: formattedStartDate,
+              endDate: formattedEndDate,
+            },
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          axios.get(`${API_BASE_URL}/one-time-expenses/between`, {
+            params: {
+              startDate: formattedStartDate,
+              endDate: formattedEndDate,
+            },
+            headers: { Authorization: `Bearer ${token}` },
+          }),
         ]);
 
       // ✅ Extract data (handle failures gracefully)
@@ -146,11 +166,48 @@ export default function ReportsPage() {
       const creditCardRevenue = creditCardRes.status === 'fulfilled' ? creditCardRes.value.data : null;
       const chargesRevenue = chargesRes.status === 'fulfilled' ? chargesRes.value.data : null;
       const fixedExpenses = fixedExpensesRes.status === 'fulfilled' ? fixedExpensesRes.value.data : null;
+      const leaseExpense = leaseExpenseRes.status === 'fulfilled' ? leaseExpenseRes.value.data : null;
+      const oneTimeExpensesAll = oneTimeExpensesRes.status === 'fulfilled' ? oneTimeExpensesRes.value.data : [];
+
+      const fixedOneTimeExpenses = Array.isArray(fixedExpenses?.expenseItems)
+        ? fixedExpenses.expenseItems.filter((item) => item?.expenseType === "ONE_TIME")
+        : [];
+
+      const selectedDriverNumberStr = selectedDriver?.driverNumber != null ? String(selectedDriver.driverNumber) : "";
+
+      const oneTimeExpenses = Array.isArray(oneTimeExpensesAll)
+        ? oneTimeExpensesAll.filter((expense) => {
+          const expenseDriverNumberStr = expense?.driver?.driverNumber != null ? String(expense.driver.driverNumber) : null;
+          const expenseOwnerNumberStr = expense?.owner?.driverNumber != null ? String(expense.owner.driverNumber) : null;
+          const directDriverNumberStr = expense?.driverNumber != null ? String(expense.driverNumber) : null;
+          const directOwnerNumberStr = expense?.ownerDriverNumber != null ? String(expense.ownerDriverNumber) : null;
+
+          if (expense?.entityType === "DRIVER") {
+            return (
+              expenseDriverNumberStr === selectedDriverNumberStr ||
+              directDriverNumberStr === selectedDriverNumberStr
+            );
+          }
+
+          if (expense?.entityType === "OWNER") {
+            return (
+              expenseOwnerNumberStr === selectedDriverNumberStr ||
+              directOwnerNumberStr === selectedDriverNumberStr
+            );
+          }
+
+          return false;
+        })
+        : [];
+
+      const reportOneTimeExpenses = fixedOneTimeExpenses.length > 0 ? fixedOneTimeExpenses : oneTimeExpenses;
 
       console.log('✅ Lease Revenue Total:', leaseRevenue?.totalRevenue || leaseRevenue?.grandTotalLease || 0);
       console.log('✅ Credit Card Total:', creditCardRevenue?.totalAmount || 0);
       console.log('✅ Charges Total:', chargesRevenue?.grandTotal || chargesRevenue?.totalAmount || 0);
       console.log('✅ Fixed Expenses Total:', fixedExpenses?.totalAmount || fixedExpenses?.totalExpenses || 0);
+      console.log('✅ Lease Expense Total:', leaseExpense?.grandTotalLease || leaseExpense?.totalLeaseExpense || 0);
+      console.log('✅ One-Time Expenses Total:', reportOneTimeExpenses.reduce((sum, exp) => sum + parseFloat(exp?.amount ?? exp?.chargedAmount ?? 0), 0));
 
       // ✅ Calculate totals
       const totalRevenue = 
@@ -158,14 +215,17 @@ export default function ReportsPage() {
         parseFloat(creditCardRevenue?.totalAmount || 0) +
         parseFloat(chargesRevenue?.grandTotal || chargesRevenue?.totalAmount || 0);
 
-      const totalExpenses = parseFloat(fixedExpenses?.totalAmount || fixedExpenses?.totalExpenses || 0);
+      const fixedExpensesTotal = parseFloat(fixedExpenses?.totalAmount || fixedExpenses?.totalExpenses || 0);
+      const leaseExpenseTotal = parseFloat(leaseExpense?.grandTotalLease || leaseExpense?.totalLeaseExpense || 0);
+      const oneTimeExpensesTotal = reportOneTimeExpenses.reduce((sum, exp) => sum + parseFloat(exp?.amount ?? exp?.chargedAmount ?? 0), 0);
+      const totalExpenses = fixedExpensesTotal + leaseExpenseTotal + oneTimeExpensesTotal;
       const netAmount = totalRevenue - totalExpenses;
-      const amountDue = netAmount > 0 ? netAmount : 0;
+      const amountDue = netAmount;
 
       console.log('📊 CALCULATED TOTALS:');
       console.log('Total Revenue:', totalRevenue);
       console.log('Total Expenses:', totalExpenses);
-      console.log('Amount Due:', amountDue);
+      console.log('Amount Due/Owing:', amountDue);
 
       // ✅ Store EVERYTHING in cache
       const data = {
@@ -173,6 +233,8 @@ export default function ReportsPage() {
         creditCardRevenue,
         chargesRevenue,
         fixedExpenses,
+        leaseExpense,
+        oneTimeExpenses: reportOneTimeExpenses,
         totalRevenue,
         totalExpenses,
         amountPaid: 0,
@@ -202,6 +264,51 @@ export default function ReportsPage() {
 
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
+  };
+
+  const handleOpenDetails = () => setDetailsDialogOpen(true);
+  const handleCloseDetails = () => setDetailsDialogOpen(false);
+
+  const handleDownloadPdf = () => {
+    window.print();
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const handleEmail = () => {
+    if (!selectedDriver || !reportData) return;
+
+    const leaseRevenueTotal = parseFloat(
+      reportData?.leaseRevenue?.totalRevenue || reportData?.leaseRevenue?.grandTotalLease || 0
+    );
+    const creditCardTotal = parseFloat(reportData?.creditCardRevenue?.totalAmount || 0);
+    const chargesTotal = parseFloat(reportData?.chargesRevenue?.grandTotal || reportData?.chargesRevenue?.totalAmount || 0);
+    const fixedExpensesTotal = parseFloat(reportData?.fixedExpenses?.totalAmount || reportData?.fixedExpenses?.totalExpenses || 0);
+
+    const subject = `Financial Report - ${selectedDriver.firstName} ${selectedDriver.lastName}`;
+    const amountDueValue = parseFloat(reportData.amountDue || 0);
+    const amountDueDisplay = amountDueValue < 0
+      ? `($${Math.abs(amountDueValue).toFixed(2)})`
+      : `$${Math.abs(amountDueValue).toFixed(2)}`;
+    const body = [
+      `Driver: ${selectedDriver.firstName} ${selectedDriver.lastName} (${selectedDriver.driverNumber})`,
+      `Period: ${startDate?.toLocaleDateString()} - ${endDate?.toLocaleDateString()}`,
+      "",
+      `Lease Revenue: $${leaseRevenueTotal.toFixed(2)}`,
+      `Credit Card Revenue: $${creditCardTotal.toFixed(2)}`,
+      `Charges Revenue: $${chargesTotal.toFixed(2)}`,
+      "",
+      `Total Revenue: $${(reportData.totalRevenue || 0).toFixed(2)}`,
+      `Total Expenses: $${(reportData.totalExpenses || 0).toFixed(2)}`,
+      `Amount Paid: $${(reportData.amountPaid || 0).toFixed(2)}`,
+      `Amount Due/Owing: ${amountDueDisplay}`,
+      "",
+      `Fixed Expenses (details total): $${fixedExpensesTotal.toFixed(2)}`,
+    ].join("\n");
+
+    window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
 
   const isReportReady = reportData !== null;
@@ -353,17 +460,37 @@ export default function ReportsPage() {
             </Grid>
 
             <Grid item xs={12} sm={6} md={2.4}>
-              <Card sx={{ height: '100%', bgcolor: '#fff3e0' }}>
+              <Card sx={{ height: '100%', bgcolor: reportData.amountDue < 0 ? '#ffebee' : '#e8f5e9' }}>
                 <CardContent>
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                    <AccountBalance sx={{ color: '#e65100', mr: 1 }} />
+                    <AccountBalance sx={{ color: reportData.amountDue < 0 ? '#c62828' : '#2e7d32', mr: 1 }} />
                     <Typography variant="caption" color="textSecondary">
-                      Amount Due
+                      Amount Due/Owing
                     </Typography>
                   </Box>
-                  <Typography variant="h5" sx={{ fontWeight: 700, color: '#e65100' }}>
-                    ${reportData.amountDue.toFixed(2)}
+                  <Typography
+                    variant="h5"
+                    sx={{ fontWeight: 700, color: reportData.amountDue < 0 ? '#c62828' : '#2e7d32' }}
+                  >
+                    {reportData.amountDue < 0
+                      ? `($${Math.abs(reportData.amountDue).toFixed(2)})`
+                      : `$${Math.abs(reportData.amountDue).toFixed(2)}`}
                   </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid item xs={12} sm={6} md={2.4}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Button
+                    variant="contained"
+                    onClick={handleOpenDetails}
+                    startIcon={<Visibility />}
+                    sx={{ backgroundColor: "#3e5244", "&:hover": { backgroundColor: "#2d3d32" } }}
+                  >
+                    See Details
+                  </Button>
                 </CardContent>
               </Card>
             </Grid>
@@ -425,6 +552,362 @@ export default function ReportsPage() {
           </Paper>
         )}
       </Container>
+
+      <Dialog open={detailsDialogOpen} onClose={handleCloseDetails} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2 }}>
+          <Box>
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              Report Details
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {selectedDriver?.firstName} {selectedDriver?.lastName} ({selectedDriver?.driverNumber})
+              {startDate && endDate ? ` • ${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}` : ""}
+            </Typography>
+          </Box>
+          <Button variant="outlined" startIcon={<Download />} onClick={handleDownloadPdf}>
+            Download PDF
+          </Button>
+        </DialogTitle>
+
+        <DialogContent dividers>
+          {!reportData ? (
+            <Typography color="text.secondary">No report data available.</Typography>
+          ) : (
+            (() => {
+              const leaseRevenueTotal = parseFloat(
+                reportData?.leaseRevenue?.totalRevenue || reportData?.leaseRevenue?.grandTotalLease || 0
+              );
+              const creditCardTotal = parseFloat(reportData?.creditCardRevenue?.totalAmount || 0);
+              const chargesTotal = parseFloat(
+                reportData?.chargesRevenue?.grandTotal || reportData?.chargesRevenue?.totalAmount || 0
+              );
+              const fixedExpensesTotal = parseFloat(
+                reportData?.fixedExpenses?.totalAmount || reportData?.fixedExpenses?.totalExpenses || 0
+              );
+              const leaseExpenseTotal = parseFloat(
+                reportData?.leaseExpense?.grandTotalLease || reportData?.leaseExpense?.totalLeaseExpense || 0
+              );
+              const oneTimeExpensesTotal = (reportData?.oneTimeExpenses || []).reduce(
+                (sum, exp) => sum + parseFloat(exp?.amount || 0),
+                0
+              );
+
+              const leaseRevenueShifts = reportData?.leaseRevenue?.leaseItems || reportData?.leaseRevenue?.shifts || reportData?.leaseRevenue?.shiftItems || [];
+              const creditCardTransactions = reportData?.creditCardRevenue?.transactionItems || reportData?.creditCardRevenue?.transactions || reportData?.creditCardRevenue?.items || [];
+              const chargeItems = reportData?.chargesRevenue?.chargeItems || reportData?.chargesRevenue?.charges || [];
+
+              const fixedExpenseItems = reportData?.fixedExpenses?.expenseItems || reportData?.fixedExpenses?.expenses || [];
+              const leaseExpenseItems = reportData?.leaseExpense?.leaseExpenseItems || [];
+              const oneTimeExpenseItems = reportData?.oneTimeExpenses || [];
+
+              return (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+                    Summary
+                  </Typography>
+                  <TableContainer component={Paper} variant="outlined" sx={{ mb: 3 }}>
+                    <Table size="small">
+                      <TableBody>
+                        <TableRow>
+                          <TableCell>Total Revenue</TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 700, color: 'success.main' }}>
+                            ${(reportData.totalRevenue || 0).toFixed(2)}
+                          </TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell>Total Expenses</TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 700, color: 'error.main' }}>
+                            ${(reportData.totalExpenses || 0).toFixed(2)}
+                          </TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell>Amount Paid</TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 700, color: 'primary.main' }}>
+                            ${(reportData.amountPaid || 0).toFixed(2)}
+                          </TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell>Amount Due/Owing</TableCell>
+                          <TableCell
+                            align="right"
+                            sx={{ fontWeight: 700, color: (reportData.amountDue || 0) < 0 ? '#c62828' : '#2e7d32' }}
+                          >
+                            {(reportData.amountDue || 0) < 0
+                              ? `($${Math.abs(reportData.amountDue || 0).toFixed(2)})`
+                              : `$${Math.abs(reportData.amountDue || 0).toFixed(2)}`}
+                          </TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+
+                  <Divider sx={{ my: 2 }} />
+
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+                    Revenue Breakdown
+                  </Typography>
+                  <TableContainer component={Paper} variant="outlined" sx={{ mb: 3 }}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Source</TableCell>
+                          <TableCell align="right">Amount</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        <TableRow>
+                          <TableCell>Lease Revenue</TableCell>
+                          <TableCell align="right">${leaseRevenueTotal.toFixed(2)}</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell>Credit Card Revenue</TableCell>
+                          <TableCell align="right">${creditCardTotal.toFixed(2)}</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell>Charges Revenue</TableCell>
+                          <TableCell align="right">${chargesTotal.toFixed(2)}</TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                    Lease Revenue Shifts
+                  </Typography>
+                  <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 260 }}>
+                    <Table size="small" stickyHeader>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Date</TableCell>
+                          <TableCell>Cab</TableCell>
+                          <TableCell>Driver</TableCell>
+                          <TableCell align="right">Amount</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {(Array.isArray(leaseRevenueShifts) && leaseRevenueShifts.length > 0) ? (
+                          leaseRevenueShifts.map((s, idx) => (
+                            <TableRow key={idx} hover>
+                              <TableCell>{s?.shiftDate || s?.date || s?.tripDate || "-"}</TableCell>
+                              <TableCell>{s?.cabNumber || s?.cab || "-"}</TableCell>
+                              <TableCell>{s?.driverName || s?.workingDriverName || s?.driverNumber || "-"}</TableCell>
+                              <TableCell align="right">
+                                ${parseFloat(s?.totalLease || s?.totalRevenue || s?.total || s?.amount || s?.leaseAmount || 0).toFixed(2)}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={4} align="center">
+                              <Typography variant="body2" color="text.secondary">
+                                No lease revenue items found for this period.
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                    Credit Card Transactions
+                  </Typography>
+                  <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 260 }}>
+                    <Table size="small" stickyHeader>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Date</TableCell>
+                          <TableCell>Description</TableCell>
+                          <TableCell align="right">Amount</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {(Array.isArray(creditCardTransactions) && creditCardTransactions.length > 0) ? (
+                          creditCardTransactions.map((t, idx) => (
+                            <TableRow key={idx} hover>
+                              <TableCell>{t?.transactionDate || t?.date || t?.createdAt || "-"}</TableCell>
+                              <TableCell>
+                                {t?.description || t?.memo || t?.cardType || t?.authorizationCode || "-"}
+                              </TableCell>
+                              <TableCell align="right">
+                                ${parseFloat(t?.totalAmount || t?.amount || 0).toFixed(2)}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={3} align="center">
+                              <Typography variant="body2" color="text.secondary">
+                                No credit card transactions found for this period.
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                    Charges
+                  </Typography>
+                  <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 260 }}>
+                    <Table size="small" stickyHeader>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Date</TableCell>
+                          <TableCell>Account</TableCell>
+                          <TableCell>Customer</TableCell>
+                          <TableCell align="right">Total</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {(Array.isArray(chargeItems) ? chargeItems : []).map((c, idx) => (
+                          <TableRow key={idx} hover>
+                            <TableCell>{c?.tripDate || c?.date || "-"}</TableCell>
+                            <TableCell>{c?.accountId || c?.subAccount || "-"}</TableCell>
+                            <TableCell>{c?.customerName || "-"}</TableCell>
+                            <TableCell align="right">
+                              ${parseFloat(c?.totalAmount || c?.amount || 0).toFixed(2)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+                    Expense Breakdown
+                  </Typography>
+                  <TableContainer component={Paper} variant="outlined" sx={{ mb: 3 }}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Category</TableCell>
+                          <TableCell align="right">Amount</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        <TableRow>
+                          <TableCell>Fixed Expenses</TableCell>
+                          <TableCell align="right">${fixedExpensesTotal.toFixed(2)}</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell>Lease Expense</TableCell>
+                          <TableCell align="right">${leaseExpenseTotal.toFixed(2)}</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell>One-Time Expenses</TableCell>
+                          <TableCell align="right">${oneTimeExpensesTotal.toFixed(2)}</TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                    Fixed Expense Items
+                  </Typography>
+                  <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 260 }}>
+                    <Table size="small" stickyHeader>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Date</TableCell>
+                          <TableCell>Description</TableCell>
+                          <TableCell>Category</TableCell>
+                          <TableCell>Type</TableCell>
+                          <TableCell align="right">Charged</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {(Array.isArray(fixedExpenseItems) ? fixedExpenseItems : []).map((e, idx) => (
+                          <TableRow key={idx} hover>
+                            <TableCell>{e?.startDate || e?.expenseDate || "-"}</TableCell>
+                            <TableCell>{e?.description || "-"}</TableCell>
+                            <TableCell>{e?.category || e?.expenseCategory?.categoryName || "-"}</TableCell>
+                            <TableCell>{e?.expenseType || "-"}</TableCell>
+                            <TableCell align="right">
+                              ${parseFloat(e?.chargedAmount || e?.amount || 0).toFixed(2)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                    Lease Expense Items
+                  </Typography>
+                  <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 260 }}>
+                    <Table size="small" stickyHeader>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Date</TableCell>
+                          <TableCell>Cab</TableCell>
+                          <TableCell>Shift Owner</TableCell>
+                          <TableCell align="right">Total Lease</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {(Array.isArray(leaseExpenseItems) ? leaseExpenseItems : []).map((e, idx) => (
+                          <TableRow key={idx} hover>
+                            <TableCell>{e?.shiftDate || "-"}</TableCell>
+                            <TableCell>{e?.cabNumber || "-"}</TableCell>
+                            <TableCell>{e?.ownerDriverName || e?.ownerDriverNumber || "-"}</TableCell>
+                            <TableCell align="right">${parseFloat(e?.totalLease || 0).toFixed(2)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                    One-Time Expense Items
+                  </Typography>
+                  <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 260 }}>
+                    <Table size="small" stickyHeader>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Date</TableCell>
+                          <TableCell>Description</TableCell>
+                          <TableCell>Vendor</TableCell>
+                          <TableCell>Paid By</TableCell>
+                          <TableCell align="right">Amount</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {(Array.isArray(oneTimeExpenseItems) ? oneTimeExpenseItems : []).map((e, idx) => (
+                          <TableRow key={idx} hover>
+                            <TableCell>{e?.expenseDate || "-"}</TableCell>
+                            <TableCell>{e?.description || "-"}</TableCell>
+                            <TableCell>{e?.vendor || "-"}</TableCell>
+                            <TableCell>{e?.paidBy || "-"}</TableCell>
+                            <TableCell align="right">${parseFloat(e?.amount || 0).toFixed(2)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Box>
+              );
+            })()
+          )}
+        </DialogContent>
+
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button startIcon={<Email />} variant="outlined" onClick={handleEmail}>
+            Email
+          </Button>
+          <Button startIcon={<Print />} variant="outlined" onClick={handlePrint}>
+            Print
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleCloseDetails}
+            sx={{ backgroundColor: "#3e5244", "&:hover": { backgroundColor: "#2d3d32" } }}
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

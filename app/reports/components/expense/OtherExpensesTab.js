@@ -59,17 +59,23 @@ const formatDateForAPI = (date) => {
   return `${year}-${month}-${day}`;
 };
 
-export default function OneTimeExpensesTab({ driverNumber, startDate, endDate }) {
+export default function OneTimeExpensesTab({ driverNumber, startDate, endDate, data }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expenses, setExpenses] = useState([]);
   const [expandedCategory, setExpandedCategory] = useState(null);
 
   useEffect(() => {
+    if (Array.isArray(data) && data.length > 0) {
+      setExpenses(data);
+      setLoading(false);
+      setError("");
+      return;
+    }
     if (driverNumber && startDate && endDate) {
       loadOneTimeExpenses();
     }
-  }, [driverNumber, startDate, endDate]);
+  }, [driverNumber, startDate, endDate, data]);
 
   const loadOneTimeExpenses = async () => {
     setLoading(true);
@@ -109,23 +115,22 @@ export default function OneTimeExpensesTab({ driverNumber, startDate, endDate })
       // 2. entityType is OWNER and entityId matches (owner = driver in many cases)
       // 3. responsibleParty is DRIVER or OWNER and they match this driver
       
-      const driverExpenses = allExpenses.filter(expense => {
-        // For now, we'll show all expenses where entityType is DRIVER or OWNER
-        // and matches this driver number
-        // You may need to adjust this logic based on your business rules
-        
-        if (expense.entityType === "DRIVER" && expense.driver?.driverNumber === driverNumber) {
-          return true;
+      const driverNumberStr = driverNumber != null ? String(driverNumber) : "";
+
+      const driverExpenses = allExpenses.filter((expense) => {
+        const expenseDriverNumberStr = expense?.driver?.driverNumber != null ? String(expense.driver.driverNumber) : null;
+        const expenseOwnerNumberStr = expense?.owner?.driverNumber != null ? String(expense.owner.driverNumber) : null;
+        const directDriverNumberStr = expense?.driverNumber != null ? String(expense.driverNumber) : null;
+        const directOwnerNumberStr = expense?.ownerDriverNumber != null ? String(expense.ownerDriverNumber) : null;
+
+        if (expense?.entityType === "DRIVER") {
+          return expenseDriverNumberStr === driverNumberStr || directDriverNumberStr === driverNumberStr;
         }
-        
-        if (expense.entityType === "OWNER" && expense.owner?.driverNumber === driverNumber) {
-          return true;
+
+        if (expense?.entityType === "OWNER") {
+          return expenseOwnerNumberStr === driverNumberStr || directOwnerNumberStr === driverNumberStr;
         }
-        
-        // Also include if responsible party matches
-        // This requires checking if the driver is the one responsible
-        // For simplicity, we're checking entity association
-        
+
         return false;
       });
 
@@ -139,15 +144,27 @@ export default function OneTimeExpensesTab({ driverNumber, startDate, endDate })
     }
   };
 
+  const getExpenseDate = (expense) => {
+    return expense?.expenseDate || expense?.startDate || expense?.date || "";
+  };
+
+  const getExpenseCategoryName = (expense) => {
+    return expense?.expenseCategory?.categoryName || expense?.category || "Uncategorized";
+  };
+
+  const getExpenseAmount = (expense) => {
+    return parseFloat(expense?.amount ?? expense?.chargedAmount ?? expense?.originalAmount ?? 0);
+  };
+
   // Calculate totals
   const calculateTotals = () => {
-    const total = expenses.reduce((sum, exp) => sum + parseFloat(exp.amount || 0), 0);
+    const total = expenses.reduce((sum, exp) => sum + getExpenseAmount(exp), 0);
     const reimbursable = expenses
       .filter(exp => exp.isReimbursable && !exp.isReimbursed)
-      .reduce((sum, exp) => sum + parseFloat(exp.amount || 0), 0);
+      .reduce((sum, exp) => sum + getExpenseAmount(exp), 0);
     const reimbursed = expenses
       .filter(exp => exp.isReimbursed)
-      .reduce((sum, exp) => sum + parseFloat(exp.amount || 0), 0);
+      .reduce((sum, exp) => sum + getExpenseAmount(exp), 0);
     
     return { total, reimbursable, reimbursed };
   };
@@ -157,7 +174,7 @@ export default function OneTimeExpensesTab({ driverNumber, startDate, endDate })
     const grouped = {};
     
     expenses.forEach(expense => {
-      const categoryName = expense.expenseCategory?.categoryName || "Uncategorized";
+      const categoryName = getExpenseCategoryName(expense);
       
       if (!grouped[categoryName]) {
         grouped[categoryName] = {
@@ -169,7 +186,7 @@ export default function OneTimeExpensesTab({ driverNumber, startDate, endDate })
       }
       
       grouped[categoryName].expenses.push(expense);
-      grouped[categoryName].total += parseFloat(expense.amount || 0);
+      grouped[categoryName].total += getExpenseAmount(expense);
     });
     
     return Object.values(grouped).sort((a, b) => b.total - a.total);
@@ -365,9 +382,9 @@ export default function OneTimeExpensesTab({ driverNumber, startDate, endDate })
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {group.expenses.map((expense) => (
-                        <TableRow key={expense.id}>
-                          <TableCell>{expense.expenseDate}</TableCell>
+                      {group.expenses.map((expense, idx) => (
+                        <TableRow key={expense.id ?? `${getExpenseDate(expense)}-${getExpenseCategoryName(expense)}-${idx}`}> 
+                          <TableCell>{getExpenseDate(expense) || "-"}</TableCell>
                           <TableCell>
                             <Typography variant="body2">
                               {expense.description || "-"}
@@ -388,14 +405,14 @@ export default function OneTimeExpensesTab({ driverNumber, startDate, endDate })
                           <TableCell>{expense.vendor || "-"}</TableCell>
                           <TableCell>
                             <Chip 
-                              label={expense.paidBy} 
+                              label={expense.paidBy || "-"} 
                               size="small" 
                               color={expense.paidBy === "DRIVER" ? "warning" : "default"}
                             />
                           </TableCell>
                           <TableCell align="right">
                             <Typography variant="body2" fontWeight="bold" color="error">
-                              ${parseFloat(expense.amount).toFixed(2)}
+                              ${getExpenseAmount(expense).toFixed(2)}
                             </Typography>
                           </TableCell>
                           <TableCell>
@@ -452,12 +469,12 @@ export default function OneTimeExpensesTab({ driverNumber, startDate, endDate })
               </TableRow>
             </TableHead>
             <TableBody>
-              {expenses.map((expense) => (
-                <TableRow key={expense.id} hover>
-                  <TableCell>{expense.expenseDate}</TableCell>
+              {expenses.map((expense, idx) => (
+                <TableRow key={expense.id ?? `${getExpenseDate(expense)}-${getExpenseCategoryName(expense)}-${idx}`} hover>
+                  <TableCell>{getExpenseDate(expense) || "-"}</TableCell>
                   <TableCell>
                     <Chip 
-                      label={expense.expenseCategory?.categoryName || "N/A"} 
+                      label={getExpenseCategoryName(expense) || "N/A"} 
                       size="small"
                       color="secondary"
                     />
@@ -487,21 +504,21 @@ export default function OneTimeExpensesTab({ driverNumber, startDate, endDate })
                   <TableCell>{expense.vendor || "-"}</TableCell>
                   <TableCell>
                     <Chip 
-                      label={expense.paidBy} 
+                      label={expense.paidBy || "-"} 
                       size="small" 
                       color={expense.paidBy === "DRIVER" ? "warning" : "default"}
                     />
                   </TableCell>
                   <TableCell>
                     <Chip 
-                      label={expense.responsibleParty} 
+                      label={expense.responsibleParty || "-"} 
                       size="small" 
                       variant="outlined"
                     />
                   </TableCell>
                   <TableCell align="right">
                     <Typography variant="body2" fontWeight="bold" color="error">
-                      ${parseFloat(expense.amount).toFixed(2)}
+                      ${getExpenseAmount(expense).toFixed(2)}
                     </Typography>
                   </TableCell>
                   <TableCell>

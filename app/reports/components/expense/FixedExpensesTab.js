@@ -45,8 +45,7 @@ export default function FixedExpensesTab({ driverNumber, startDate, endDate }) {
   // Search filters
   const [searchCategory, setSearchCategory] = useState("");
   const [searchDescription, setSearchDescription] = useState("");
-  const [filterType, setFilterType] = useState("ALL"); // ALL, RECURRING, ONE_TIME
-  
+
   // Sorting
   const [sortBy, setSortBy] = useState("date");
   const [sortOrder, setSortOrder] = useState("asc");
@@ -61,7 +60,7 @@ export default function FixedExpensesTab({ driverNumber, startDate, endDate }) {
     if (reportData && reportData.expenseItems) {
       applyFiltersAndSort();
     }
-  }, [reportData, searchCategory, searchDescription, filterType, sortBy, sortOrder]);
+  }, [reportData, searchCategory, searchDescription, sortBy, sortOrder]);
 
   const fetchFixedExpenseReport = async () => {
     setLoading(true);
@@ -91,12 +90,7 @@ export default function FixedExpensesTab({ driverNumber, startDate, endDate }) {
   };
 
   const applyFiltersAndSort = () => {
-    let filtered = [...reportData.expenseItems];
-
-    // Apply type filter
-    if (filterType !== "ALL") {
-      filtered = filtered.filter(item => item.expenseType === filterType);
-    }
+    let filtered = [...reportData.expenseItems].filter((item) => item.expenseType === "RECURRING");
 
     // Apply search filters
     if (searchCategory) {
@@ -143,7 +137,6 @@ export default function FixedExpensesTab({ driverNumber, startDate, endDate }) {
   const clearFilters = () => {
     setSearchCategory("");
     setSearchDescription("");
-    setFilterType("ALL");
   };
 
   const handleDownloadCSV = () => {
@@ -319,28 +312,6 @@ export default function FixedExpensesTab({ driverNumber, startDate, endDate }) {
             />
           </Grid>
           <Grid item xs={12} md={3}>
-            <Box sx={{ display: "flex", gap: 1 }}>
-              <Chip
-                label="All"
-                color={filterType === "ALL" ? "primary" : "default"}
-                onClick={() => setFilterType("ALL")}
-                clickable
-              />
-              <Chip
-                label="Recurring"
-                color={filterType === "RECURRING" ? "primary" : "default"}
-                onClick={() => setFilterType("RECURRING")}
-                clickable
-              />
-              <Chip
-                label="One-Time"
-                color={filterType === "ONE_TIME" ? "primary" : "default"}
-                onClick={() => setFilterType("ONE_TIME")}
-                clickable
-              />
-            </Box>
-          </Grid>
-          <Grid item xs={12} md={3}>
             <Button
               fullWidth
               variant="outlined"
@@ -352,7 +323,7 @@ export default function FixedExpensesTab({ driverNumber, startDate, endDate }) {
           </Grid>
         </Grid>
         <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
-          Showing {filteredData.length} of {reportData.expenseItems.length} expenses
+          Showing {filteredData.length} recurring expenses
         </Typography>
       </Paper>
 

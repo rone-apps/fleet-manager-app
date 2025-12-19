@@ -6,6 +6,7 @@ import {
   AttachMoney,
   Autorenew,
   MoneyOff,
+  ReceiptLong,
 } from "@mui/icons-material";
 
 // Import expense sub-components
@@ -16,9 +17,20 @@ import OtherExpensesTab from "./expense/OtherExpensesTab";
 export default function ExpenseTab({ driverNumber, startDate, endDate, reportData }) {
   const [activeSubTab, setActiveSubTab] = useState(0);
 
+  const leaseExpenseTotal =
+    reportData?.leaseExpense?.total ??
+    parseFloat(reportData?.leaseExpense?.grandTotalLease || reportData?.leaseExpense?.totalLeaseExpense || 0);
+
   const fixedExpensesTotal =
     reportData?.fixedExpenses?.total ??
     parseFloat(reportData?.fixedExpenses?.totalAmount || reportData?.fixedExpenses?.totalExpenses || 0);
+
+  const otherExpensesTotal = Array.isArray(reportData?.oneTimeExpenses)
+    ? reportData.oneTimeExpenses.reduce(
+        (sum, exp) => sum + parseFloat(exp?.amount ?? exp?.chargedAmount ?? exp?.originalAmount ?? 0),
+        0
+      )
+    : 0;
 
   const handleSubTabChange = (event, newValue) => {
     setActiveSubTab(newValue);
@@ -43,9 +55,9 @@ export default function ExpenseTab({ driverNumber, startDate, endDate, reportDat
         sx={{ borderBottom: 1, borderColor: "divider", mb: 3 }}
       >
         <Tab 
-          icon={<AttachMoney />} 
+          icon={<ReceiptLong />} 
           iconPosition="start" 
-          label="Lease Expense" 
+          label={`Lease Expense ($${leaseExpenseTotal.toFixed(2)})`} 
         />
         <Tab 
           icon={<Autorenew />} 
@@ -55,7 +67,7 @@ export default function ExpenseTab({ driverNumber, startDate, endDate, reportDat
         <Tab 
           icon={<MoneyOff />} 
           iconPosition="start" 
-          label="Other Expenses" 
+          label={`Other Expenses ($${otherExpensesTotal.toFixed(2)})`} 
         />
       </Tabs>
 
@@ -72,7 +84,6 @@ export default function ExpenseTab({ driverNumber, startDate, endDate, reportDat
           driverNumber={driverNumber}
           startDate={startDate}
           endDate={endDate}
-          data={reportData.fixedExpenses.data}
         />
       )}
       {activeSubTab === 2 && (
@@ -80,7 +91,7 @@ export default function ExpenseTab({ driverNumber, startDate, endDate, reportDat
           driverNumber={driverNumber}
           startDate={startDate}
           endDate={endDate}
-          data={null}
+          data={Array.isArray(reportData?.oneTimeExpenses) && reportData.oneTimeExpenses.length > 0 ? reportData.oneTimeExpenses : undefined}
         />
       )}
     </Box>
