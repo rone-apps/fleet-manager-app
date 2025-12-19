@@ -73,7 +73,7 @@ export default function ExpensesPage() {
   // Delete Warning Dialog
   const [deleteWarningDialog, setDeleteWarningDialog] = useState(false);
   const [deleteWarningData, setDeleteWarningData] = useState({
-    type: "",      // 'recurring' or 'onetime'
+    type: "",
     error: "",
     reason: "",
     solution: ""
@@ -106,11 +106,13 @@ export default function ExpensesPage() {
     expenseCategoryId: "",
     entityType: "CAB",
     entityId: "",
+    shiftType: "",  // ✅ ADDED - For SHIFT entity type
     amount: "",
     billingMethod: "MONTHLY",
     effectiveFrom: "",
     effectiveTo: "",
     notes: "",
+    isActive: true,
   });
 
   // OneTime Expense Form
@@ -118,6 +120,7 @@ export default function ExpensesPage() {
     expenseCategoryId: "",
     entityType: "CAB",
     entityId: "",
+    shiftType: "",  // ✅ ADDED - For SHIFT entity type
     amount: "",
     expenseDate: new Date().toISOString().split('T')[0],
     paidBy: "COMPANY",
@@ -141,7 +144,6 @@ export default function ExpensesPage() {
     }
     setCurrentUser(user);
     
-    // Set default date range (current month)
     const today = new Date();
     const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
     const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
@@ -265,11 +267,13 @@ export default function ExpensesPage() {
         expenseCategoryId: expense.expenseCategory?.id || "",
         entityType: expense.entityType,
         entityId: expense.entityId,
+        shiftType: expense.shiftType || "",  // ✅ ADDED - Load shiftType from expense
         amount: expense.amount,
         billingMethod: expense.billingMethod,
         effectiveFrom: expense.effectiveFrom,
         effectiveTo: expense.effectiveTo || "",
         notes: expense.notes || "",
+        isActive: expense.isActive !== undefined ? expense.isActive : true,
       });
     } else {
       setEditingRecurring(null);
@@ -281,11 +285,13 @@ export default function ExpensesPage() {
         expenseCategoryId: "",
         entityType: "CAB",
         entityId: "",
+        shiftType: "",  // ✅ ADDED
         amount: "",
         billingMethod: "MONTHLY",
         effectiveFrom: firstOfMonth,
         effectiveTo: "",
         notes: "",
+        isActive: true,
       });
     }
     setError("");
@@ -297,6 +303,12 @@ export default function ExpensesPage() {
     if (!recurringFormData.expenseCategoryId || !recurringFormData.entityId || 
         !recurringFormData.amount || !recurringFormData.effectiveFrom) {
       setError("Category, entity, amount, and effective date are required");
+      return;
+    }
+
+    // ✅ ADDED - Validate shiftType for SHIFT entity
+    if (recurringFormData.entityType === "SHIFT" && !recurringFormData.shiftType) {
+      setError("Shift type (DAY or NIGHT) is required for shift expenses");
       return;
     }
 
@@ -329,7 +341,6 @@ export default function ExpensesPage() {
   };
 
   const handleDeleteRecurring = async (id) => {
-    // Show dialog explaining recurring expenses can't be deleted
     setDeleteWarningData({
       type: 'recurring',
       error: 'Recurring expenses cannot be deleted',
@@ -371,6 +382,7 @@ export default function ExpensesPage() {
         expenseCategoryId: expense.expenseCategory?.id || "",
         entityType: expense.entityType,
         entityId: expense.entityId,
+        shiftType: expense.shiftType || "",  // ✅ ADDED - Load shiftType from expense
         amount: expense.amount,
         expenseDate: expense.expenseDate,
         paidBy: expense.paidBy,
@@ -388,6 +400,7 @@ export default function ExpensesPage() {
         expenseCategoryId: "",
         entityType: "CAB",
         entityId: "",
+        shiftType: "",  // ✅ ADDED
         amount: "",
         expenseDate: new Date().toISOString().split('T')[0],
         paidBy: "COMPANY",
@@ -409,6 +422,12 @@ export default function ExpensesPage() {
     if (!oneTimeFormData.expenseCategoryId || !oneTimeFormData.entityId || 
         !oneTimeFormData.amount || !oneTimeFormData.expenseDate) {
       setError("Category, entity, amount, and date are required");
+      return;
+    }
+
+    // ✅ ADDED - Validate shiftType for SHIFT entity
+    if (oneTimeFormData.entityType === "SHIFT" && !oneTimeFormData.shiftType) {
+      setError("Shift type (DAY or NIGHT) is required for shift expenses");
       return;
     }
 
@@ -441,7 +460,6 @@ export default function ExpensesPage() {
   };
 
   const handleDeleteOneTime = async (id) => {
-    // Show dialog explaining expenses can't be deleted
     setDeleteWarningData({
       type: 'onetime',
       error: 'Expenses cannot be deleted once entered',
@@ -453,12 +471,14 @@ export default function ExpensesPage() {
 
   // ==================== Helper Functions ====================
 
-  const getEntityDisplay = (entityType, entityId) => {
+  // ✅ UPDATED - Accept shiftType parameter
+  const getEntityDisplay = (entityType, entityId, shiftType) => {
     if (entityType === "CAB") {
       const cab = cabs.find(c => c.id === entityId);
       return cab ? `Cab ${cab.cabNumber}` : `Cab #${entityId}`;
     } else if (entityType === "SHIFT") {
-      return entityId === 1 || entityId === "1" ? "Day Shift" : "Night Shift";
+      // ✅ CHANGED - Use shiftType instead of entityId
+      return shiftType === "DAY" ? "Day Shift" : "Night Shift";
     } else if (entityType === "DRIVER" || entityType === "OWNER") {
       const driver = drivers.find(d => d.id === entityId);
       return driver ? `${driver.firstName} ${driver.lastName}` : `Driver #${entityId}`;
@@ -548,7 +568,6 @@ export default function ExpensesPage() {
     <Box>
       <GlobalNav currentUser={currentUser} title="Expenses" />
       <Box sx={{ p: 3 }}>
-        {/* Header */}
         <Box sx={{ mb: 3 }}>
           <Typography variant="h4" fontWeight="bold" gutterBottom>
             Expense Management
@@ -558,7 +577,6 @@ export default function ExpensesPage() {
           </Typography>
         </Box>
 
-        {/* Success/Error Messages */}
         {success && (
           <Alert severity="success" onClose={() => setSuccess("")} sx={{ mb: 2 }}>
             {success}
@@ -570,7 +588,6 @@ export default function ExpensesPage() {
           </Alert>
         )}
 
-        {/* Statistics Cards */}
         <Grid container spacing={3} sx={{ mb: 3 }}>
           <Grid item xs={12} sm={6} md={3}>
             <Card>
@@ -638,7 +655,6 @@ export default function ExpensesPage() {
           </Grid>
         </Grid>
 
-        {/* Main Content */}
         <Paper>
           <Tabs value={currentTab} onChange={(e, newValue) => setCurrentTab(newValue)}>
             <Tab 
@@ -653,10 +669,8 @@ export default function ExpensesPage() {
             />
           </Tabs>
 
-          {/* Tab 1: Recurring Expenses */}
           {currentTab === 0 && (
             <Box sx={{ p: 3 }}>
-              {/* Filters */}
               <Grid container spacing={2} sx={{ mb: 3 }}>
                 <Grid item xs={12} md={2}>
                   <FormControl fullWidth size="small">
@@ -736,7 +750,6 @@ export default function ExpensesPage() {
                 </Grid>
               </Grid>
 
-              {/* Recurring Expenses Table */}
               <TableContainer>
                 <Table size="small">
                   <TableHead>
@@ -762,7 +775,8 @@ export default function ExpensesPage() {
                           />
                         </TableCell>
                         <TableCell>
-                          {getEntityDisplay(expense.entityType, expense.entityId)}
+                          {/* ✅ UPDATED - Pass shiftType parameter */}
+                          {getEntityDisplay(expense.entityType, expense.entityId, expense.shiftType)}
                         </TableCell>
                         <TableCell>
                           <Chip 
@@ -780,9 +794,9 @@ export default function ExpensesPage() {
                         <TableCell>{expense.effectiveTo || "Ongoing"}</TableCell>
                         <TableCell>
                           <Chip
-                            icon={expense.isActive ? <ActiveIcon /> : <InactiveIcon />}
-                            label={expense.isActive ? "Active" : "Inactive"}
-                            color={expense.isActive ? "success" : "default"}
+                            icon={(expense.isActive === true || expense.isActive === "true" || expense.active === true) ? <ActiveIcon /> : <InactiveIcon />}
+                            label={(expense.isActive === true || expense.isActive === "true" || expense.active === true) ? "Active" : "Inactive"}
+                            color={(expense.isActive === true || expense.isActive === "true" || expense.active === true) ? "success" : "default"}
                             size="small"
                           />
                         </TableCell>
@@ -829,10 +843,8 @@ export default function ExpensesPage() {
             </Box>
           )}
 
-          {/* Tab 2: One-Time Expenses */}
           {currentTab === 1 && (
             <Box sx={{ p: 3 }}>
-              {/* Filters */}
               <Grid container spacing={2} sx={{ mb: 3 }}>
                 <Grid item xs={12} md={2}>
                   <TextField
@@ -920,7 +932,6 @@ export default function ExpensesPage() {
                 </Grid>
               </Grid>
 
-              {/* One-Time Expenses Table */}
               <TableContainer>
                 <Table size="small">
                   <TableHead>
@@ -949,7 +960,8 @@ export default function ExpensesPage() {
                           />
                         </TableCell>
                         <TableCell>
-                          {getEntityDisplay(expense.entityType, expense.entityId)}
+                          {/* ✅ UPDATED - Pass shiftType parameter */}
+                          {getEntityDisplay(expense.entityType, expense.entityId, expense.shiftType)}
                         </TableCell>
                         <TableCell>
                           {expense.description || "-"}
@@ -1084,7 +1096,8 @@ export default function ExpensesPage() {
                     onChange={(e) => setRecurringFormData({ 
                       ...recurringFormData, 
                       entityType: e.target.value,
-                      entityId: "" 
+                      entityId: "",
+                      shiftType: ""  // ✅ ADDED - Clear shiftType when changing entity type
                     })}
                   >
                     <MenuItem value="CAB">Cab</MenuItem>
@@ -1095,39 +1108,58 @@ export default function ExpensesPage() {
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth required>
-                  <InputLabel>Entity</InputLabel>
-                  <Select
-                    value={recurringFormData.entityId}
-                    label="Entity"
-                    onChange={(e) => setRecurringFormData({ 
-                      ...recurringFormData, 
-                      entityId: e.target.value 
-                    })}
-                  >
-                    {recurringFormData.entityType === "CAB" && cabs.map((cab) => (
-                      <MenuItem key={cab.id} value={cab.id}>
-                        Cab {cab.cabNumber} - {cab.registrationNumber}
-                      </MenuItem>
-                    ))}
-                    {recurringFormData.entityType === "SHIFT" && [
-                      <MenuItem key="1" value="1">Day Shift</MenuItem>,
-                      <MenuItem key="2" value="2">Night Shift</MenuItem>
-                    ]}
-                    {(recurringFormData.entityType === "DRIVER" || 
-                      recurringFormData.entityType === "OWNER") && 
-                      drivers.map((driver) => (
-                      <MenuItem key={driver.id} value={driver.id}>
-                        {driver.firstName} {driver.lastName} - {driver.driverNumber}
-                      </MenuItem>
-                    ))}
-                    {recurringFormData.entityType === "COMPANY" && (
-                      <MenuItem value="1">Company</MenuItem>
-                    )}
-                  </Select>
-                </FormControl>
-              </Grid>
+              
+              {/* ✅ UPDATED - Show ShiftType dropdown for SHIFT entity */}
+              {recurringFormData.entityType === "SHIFT" ? (
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth required>
+                    <InputLabel>Shift Type</InputLabel>
+                    <Select
+                      value={recurringFormData.shiftType}
+                      label="Shift Type"
+                      onChange={(e) => setRecurringFormData({ 
+                        ...recurringFormData, 
+                        shiftType: e.target.value,
+                        entityId: e.target.value === "DAY" ? "1" : "2"  // Set entityId for compatibility
+                      })}
+                    >
+                      <MenuItem value="DAY">Day Shift</MenuItem>
+                      <MenuItem value="NIGHT">Night Shift</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+              ) : (
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth required>
+                    <InputLabel>Entity</InputLabel>
+                    <Select
+                      value={recurringFormData.entityId}
+                      label="Entity"
+                      onChange={(e) => setRecurringFormData({ 
+                        ...recurringFormData, 
+                        entityId: e.target.value 
+                      })}
+                    >
+                      {recurringFormData.entityType === "CAB" && cabs.map((cab) => (
+                        <MenuItem key={cab.id} value={cab.id}>
+                          Cab {cab.cabNumber} - {cab.registrationNumber}
+                        </MenuItem>
+                      ))}
+                      {(recurringFormData.entityType === "DRIVER" || 
+                        recurringFormData.entityType === "OWNER") && 
+                        drivers.map((driver) => (
+                        <MenuItem key={driver.id} value={driver.id}>
+                          {driver.firstName} {driver.lastName} - {driver.driverNumber}
+                        </MenuItem>
+                      ))}
+                      {recurringFormData.entityType === "COMPANY" && (
+                        <MenuItem value="1">Company</MenuItem>
+                      )}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              )}
+
               <Grid item xs={12} md={6}>
                 <TextField
                   label="Amount"
@@ -1252,7 +1284,8 @@ export default function ExpensesPage() {
                     onChange={(e) => setOneTimeFormData({ 
                       ...oneTimeFormData, 
                       entityType: e.target.value,
-                      entityId: "" 
+                      entityId: "",
+                      shiftType: ""  // ✅ ADDED - Clear shiftType when changing entity type
                     })}
                   >
                     <MenuItem value="CAB">Cab</MenuItem>
@@ -1263,39 +1296,58 @@ export default function ExpensesPage() {
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth required>
-                  <InputLabel>Entity</InputLabel>
-                  <Select
-                    value={oneTimeFormData.entityId}
-                    label="Entity"
-                    onChange={(e) => setOneTimeFormData({ 
-                      ...oneTimeFormData, 
-                      entityId: e.target.value 
-                    })}
-                  >
-                    {oneTimeFormData.entityType === "CAB" && cabs.map((cab) => (
-                      <MenuItem key={cab.id} value={cab.id}>
-                        Cab {cab.cabNumber} - {cab.registrationNumber}
-                      </MenuItem>
-                    ))}
-                    {oneTimeFormData.entityType === "SHIFT" && [
-                      <MenuItem key="1" value="1">Day Shift</MenuItem>,
-                      <MenuItem key="2" value="2">Night Shift</MenuItem>
-                    ]}
-                    {(oneTimeFormData.entityType === "DRIVER" || 
-                      oneTimeFormData.entityType === "OWNER") && 
-                      drivers.map((driver) => (
-                      <MenuItem key={driver.id} value={driver.id}>
-                        {driver.firstName} {driver.lastName} - {driver.driverNumber}
-                      </MenuItem>
-                    ))}
-                    {oneTimeFormData.entityType === "COMPANY" && (
-                      <MenuItem value="1">Company</MenuItem>
-                    )}
-                  </Select>
-                </FormControl>
-              </Grid>
+              
+              {/* ✅ UPDATED - Show ShiftType dropdown for SHIFT entity */}
+              {oneTimeFormData.entityType === "SHIFT" ? (
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth required>
+                    <InputLabel>Shift Type</InputLabel>
+                    <Select
+                      value={oneTimeFormData.shiftType}
+                      label="Shift Type"
+                      onChange={(e) => setOneTimeFormData({ 
+                        ...oneTimeFormData, 
+                        shiftType: e.target.value,
+                        entityId: e.target.value === "DAY" ? "1" : "2"  // Set entityId for compatibility
+                      })}
+                    >
+                      <MenuItem value="DAY">Day Shift</MenuItem>
+                      <MenuItem value="NIGHT">Night Shift</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+              ) : (
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth required>
+                    <InputLabel>Entity</InputLabel>
+                    <Select
+                      value={oneTimeFormData.entityId}
+                      label="Entity"
+                      onChange={(e) => setOneTimeFormData({ 
+                        ...oneTimeFormData, 
+                        entityId: e.target.value 
+                      })}
+                    >
+                      {oneTimeFormData.entityType === "CAB" && cabs.map((cab) => (
+                        <MenuItem key={cab.id} value={cab.id}>
+                          Cab {cab.cabNumber} - {cab.registrationNumber}
+                        </MenuItem>
+                      ))}
+                      {(oneTimeFormData.entityType === "DRIVER" || 
+                        oneTimeFormData.entityType === "OWNER") && 
+                        drivers.map((driver) => (
+                        <MenuItem key={driver.id} value={driver.id}>
+                          {driver.firstName} {driver.lastName} - {driver.driverNumber}
+                        </MenuItem>
+                      ))}
+                      {oneTimeFormData.entityType === "COMPANY" && (
+                        <MenuItem value="1">Company</MenuItem>
+                      )}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              )}
+
               <Grid item xs={12} md={6}>
                 <TextField
                   label="Amount"
