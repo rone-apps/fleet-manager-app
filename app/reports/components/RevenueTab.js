@@ -28,6 +28,10 @@ export default function RevenueTab({ driverNumber, startDate, endDate, reportDat
     reportData?.chargesRevenue?.total ??
     parseFloat(reportData?.chargesRevenue?.grandTotal || reportData?.chargesRevenue?.totalAmount || 0);
 
+  const otherRevenueTotal = Array.isArray(reportData?.otherRevenue)
+    ? reportData.otherRevenue.reduce((sum, r) => sum + parseFloat(r?.amount || 0), 0)
+    : 0;
+
   const handleSubTabChange = (event, newValue) => {  
     setActiveSubTab(newValue);
   };
@@ -68,7 +72,7 @@ export default function RevenueTab({ driverNumber, startDate, endDate, reportDat
         <Tab 
           icon={<TrendingUp />} 
           iconPosition="start" 
-          label="Other Revenue" 
+          label={`Other Revenue ($${otherRevenueTotal.toFixed(2)})`} 
         />
       </Tabs>
 
@@ -101,7 +105,7 @@ export default function RevenueTab({ driverNumber, startDate, endDate, reportDat
           driverNumber={driverNumber}
           startDate={startDate}
           endDate={endDate}
-          data={null}
+          data={reportData?.otherRevenue || []}
         />
       )}
     </Box>

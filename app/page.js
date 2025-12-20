@@ -277,10 +277,10 @@ export default function HomePage() {
                 <CardContent>
                   <Assessment sx={{ fontSize: 40, color: '#f57c00', mb: 2 }} />
                   <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                    Expenses
+                    Expenses & Revenues Setup
                   </Typography>
                   <Typography variant="body2" color="textSecondary">
-                    Track one-time & recurring expenses
+                    Track one-time & recurring expenses & revenues
                   </Typography>
                 </CardContent>
               </Card>

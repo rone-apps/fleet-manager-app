@@ -110,7 +110,7 @@ export default function ReportsPage() {
       console.log('🚀 Fetching ALL report data ONCE for driver:', selectedDriver.driverNumber);
 
       // ✅ Fetch ALL revenue and expense types in PARALLEL
-      const [leaseRevenueRes, creditCardRes, chargesRes, fixedExpensesRes, leaseExpenseRes, oneTimeExpensesRes] = 
+      const [leaseRevenueRes, creditCardRes, chargesRes, otherRevenueRes, fixedExpensesRes, leaseExpenseRes, oneTimeExpensesRes] = 
         await Promise.allSettled([
           axios.get(`${API_BASE_URL}/reports/lease-revenue`, {
             params: { 
@@ -133,6 +133,14 @@ export default function ReportsPage() {
               driverNumber: selectedDriver.driverNumber,
               startDate: formattedStartDate, 
               endDate: formattedEndDate 
+            },
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          axios.get(`${API_BASE_URL}/other-revenues`, {
+            params: {
+               driverNumber: selectedDriver.driverNumber,
+              startDate: formattedStartDate,
+              endDate: formattedEndDate,
             },
             headers: { Authorization: `Bearer ${token}` },
           }),
@@ -165,9 +173,16 @@ export default function ReportsPage() {
       const leaseRevenue = leaseRevenueRes.status === 'fulfilled' ? leaseRevenueRes.value.data : null;
       const creditCardRevenue = creditCardRes.status === 'fulfilled' ? creditCardRes.value.data : null;
       const chargesRevenue = chargesRes.status === 'fulfilled' ? chargesRes.value.data : null;
+      const otherRevenueAll = otherRevenueRes.status === 'fulfilled' ? otherRevenueRes.value.data : [];
       const fixedExpenses = fixedExpensesRes.status === 'fulfilled' ? fixedExpensesRes.value.data : null;
       const leaseExpense = leaseExpenseRes.status === 'fulfilled' ? leaseExpenseRes.value.data : null;
       const oneTimeExpensesAll = oneTimeExpensesRes.status === 'fulfilled' ? oneTimeExpensesRes.value.data : [];
+
+      if (otherRevenueRes.status !== 'fulfilled') {
+        console.error('❌ Other revenue request failed:', otherRevenueRes.reason);
+      } else {
+        console.log('✅ Other revenue fetched (raw count):', Array.isArray(otherRevenueAll) ? otherRevenueAll.length : 0);
+      }
 
       const fixedOneTimeExpenses = Array.isArray(fixedExpenses?.expenseItems)
         ? fixedExpenses.expenseItems.filter((item) => item?.expenseType === "ONE_TIME")
@@ -202,9 +217,57 @@ export default function ReportsPage() {
 
       const reportOneTimeExpenses = fixedOneTimeExpenses.length > 0 ? fixedOneTimeExpenses : oneTimeExpenses;
 
+      const otherRevenue = Array.isArray(otherRevenueAll)
+        ? otherRevenueAll.filter((rev) => {
+          const selectedDriverIdStr = selectedDriver?.id != null ? String(selectedDriver.id) : "";
+          const selectedDriverNumberStr = selectedDriver?.driverNumber != null ? String(selectedDriver.driverNumber) : "";
+
+          const revDriverIdStr = rev?.driver?.id != null ? String(rev.driver.id) : null;
+          const revOwnerIdStr = rev?.owner?.id != null ? String(rev.owner.id) : null;
+
+          const revDriverNumberStr = rev?.driver?.driverNumber != null ? String(rev.driver.driverNumber) : null;
+          const revOwnerNumberStr = rev?.owner?.driverNumber != null ? String(rev.owner.driverNumber) : null;
+
+          const directDriverNumberStr = rev?.driverNumber != null ? String(rev.driverNumber) : null;
+          const directOwnerNumberStr = rev?.ownerDriverNumber != null ? String(rev.ownerDriverNumber) : null;
+
+          const revEntityIdStr = rev?.entityId != null ? String(rev.entityId) : null;
+
+          if (rev?.entityType === "DRIVER") {
+            return (
+              (revEntityIdStr != null && revEntityIdStr === selectedDriverIdStr) ||
+              (revDriverIdStr != null && revDriverIdStr === selectedDriverIdStr) ||
+              revDriverNumberStr === selectedDriverNumberStr ||
+              directDriverNumberStr === selectedDriverNumberStr
+            );
+          }
+
+          if (rev?.entityType === "OWNER") {
+            return (
+              (revEntityIdStr != null && revEntityIdStr === selectedDriverIdStr) ||
+              (revOwnerIdStr != null && revOwnerIdStr === selectedDriverIdStr) ||
+              revOwnerNumberStr === selectedDriverNumberStr ||
+              directOwnerNumberStr === selectedDriverNumberStr
+            );
+          }
+
+          // For other entity types (CAB/SHIFT/COMPANY/etc.), only include if there's an explicit
+          // association to the selected driver (by id or driverNumber).
+          if (revDriverIdStr != null && revDriverIdStr === selectedDriverIdStr) return true;
+          if (revOwnerIdStr != null && revOwnerIdStr === selectedDriverIdStr) return true;
+          if (revDriverNumberStr != null && revDriverNumberStr === selectedDriverNumberStr) return true;
+          if (revOwnerNumberStr != null && revOwnerNumberStr === selectedDriverNumberStr) return true;
+          if (directDriverNumberStr != null && directDriverNumberStr === selectedDriverNumberStr) return true;
+          if (directOwnerNumberStr != null && directOwnerNumberStr === selectedDriverNumberStr) return true;
+
+          return false;
+        })
+        : [];
+
       console.log('✅ Lease Revenue Total:', leaseRevenue?.totalRevenue || leaseRevenue?.grandTotalLease || 0);
       console.log('✅ Credit Card Total:', creditCardRevenue?.totalAmount || 0);
       console.log('✅ Charges Total:', chargesRevenue?.grandTotal || chargesRevenue?.totalAmount || 0);
+      console.log('✅ Other Revenue Total:', otherRevenue.reduce((sum, r) => sum + parseFloat(r?.amount || 0), 0));
       console.log('✅ Fixed Expenses Total:', fixedExpenses?.totalAmount || fixedExpenses?.totalExpenses || 0);
       console.log('✅ Lease Expense Total:', leaseExpense?.grandTotalLease || leaseExpense?.totalLeaseExpense || 0);
       console.log('✅ One-Time Expenses Total:', reportOneTimeExpenses.reduce((sum, exp) => sum + parseFloat(exp?.amount ?? exp?.chargedAmount ?? 0), 0));
@@ -213,7 +276,8 @@ export default function ReportsPage() {
       const totalRevenue = 
         parseFloat(leaseRevenue?.totalRevenue || leaseRevenue?.grandTotalLease || 0) +
         parseFloat(creditCardRevenue?.totalAmount || 0) +
-        parseFloat(chargesRevenue?.grandTotal || chargesRevenue?.totalAmount || 0);
+        parseFloat(chargesRevenue?.grandTotal || chargesRevenue?.totalAmount || 0) +
+        otherRevenue.reduce((sum, r) => sum + parseFloat(r?.amount || 0), 0);
 
       const fixedExpensesTotal = parseFloat(fixedExpenses?.totalAmount || fixedExpenses?.totalExpenses || 0);
       const leaseExpenseTotal = parseFloat(leaseExpense?.grandTotalLease || leaseExpense?.totalLeaseExpense || 0);
@@ -232,6 +296,7 @@ export default function ReportsPage() {
         leaseRevenue,
         creditCardRevenue,
         chargesRevenue,
+        otherRevenue,
         fixedExpenses,
         leaseExpense,
         oneTimeExpenses: reportOneTimeExpenses,
@@ -581,6 +646,10 @@ export default function ReportsPage() {
               const chargesTotal = parseFloat(
                 reportData?.chargesRevenue?.grandTotal || reportData?.chargesRevenue?.totalAmount || 0
               );
+              const otherRevenueTotal = (Array.isArray(reportData?.otherRevenue) ? reportData.otherRevenue : []).reduce(
+                (sum, r) => sum + parseFloat(r?.amount || 0),
+                0
+              );
               const fixedExpensesTotal = parseFloat(
                 reportData?.fixedExpenses?.totalAmount || reportData?.fixedExpenses?.totalExpenses || 0
               );
@@ -666,6 +735,10 @@ export default function ReportsPage() {
                         <TableRow>
                           <TableCell>Charges Revenue</TableCell>
                           <TableCell align="right">${chargesTotal.toFixed(2)}</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell>Other Revenue</TableCell>
+                          <TableCell align="right">${otherRevenueTotal.toFixed(2)}</TableCell>
                         </TableRow>
                       </TableBody>
                     </Table>

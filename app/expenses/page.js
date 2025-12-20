@@ -2,139 +2,72 @@
 
 import { useState, useEffect } from "react";
 import {
-  Box,
-  Typography,
-  Paper,
-  Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  Select,
-  IconButton,
-  Chip,
-  Alert,
-  AlertTitle,
-  Card,
-  CardContent,
-  Grid,
-  Tabs,
-  Tab,
-  InputAdornment,
-  Switch,
-  FormControlLabel,
-  Tooltip,
-  Badge,
+  Box, Typography, Paper, Button, Table, TableBody, TableCell, TableContainer,
+  TableHead, TableRow, Dialog, DialogTitle, DialogContent, DialogActions,
+  TextField, MenuItem, FormControl, InputLabel, Select, IconButton, Chip,
+  Alert, AlertTitle, Card, CardContent, Grid, Tabs, Tab, InputAdornment,
+  Switch, FormControlLabel,
 } from "@mui/material";
 import {
-  Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Receipt as ReceiptIcon,
-  DirectionsCar as CabIcon,
-  Person as DriverIcon,
-  Category as CategoryIcon,
-  DateRange as DateIcon,
-  AttachMoney as MoneyIcon,
-  TrendingUp as TrendingUpIcon,
-  Search as SearchIcon,
-  Repeat as RecurringIcon,
-  EventNote as OneTimeIcon,
-  CheckCircle as ActiveIcon,
-  Cancel as InactiveIcon,
-  Info as InfoIcon,
-  History as HistoryIcon,
-  AttachFile as AttachFileIcon,
-  MoneyOff as ReimbursableIcon,
-  Block as BlockIcon,
+  Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon,
+  TrendingUp as TrendingUpIcon, TrendingDown as TrendingDownIcon, Search as SearchIcon,
+  Repeat as RecurringIcon, EventNote as OneTimeIcon, CheckCircle as ActiveIcon,
+  Cancel as InactiveIcon, Block as BlockIcon, AccountBalance as RevenueIcon,
 } from "@mui/icons-material";
 import GlobalNav from "../components/GlobalNav";
 import { getCurrentUser } from "../lib/api";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
 
-export default function ExpensesPage() {
+export default function ExpensesRevenuesPage() {
   const [currentUser, setCurrentUser] = useState(null);
-  const [currentTab, setCurrentTab] = useState(0); // 0=Recurring, 1=OneTime
+  const [currentTab, setCurrentTab] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  // Delete Warning Dialog
-  const [deleteWarningDialog, setDeleteWarningDialog] = useState(false);
-  const [deleteWarningData, setDeleteWarningData] = useState({
-    type: "",
-    error: "",
-    reason: "",
-    solution: ""
-  });
-
-  // Data
   const [recurringExpenses, setRecurringExpenses] = useState([]);
   const [oneTimeExpenses, setOneTimeExpenses] = useState([]);
-  const [categories, setCategories] = useState([]);
+  const [otherRevenues, setOtherRevenues] = useState([]);
+  const [expenseCategories, setExpenseCategories] = useState([]);
+  const [revenueCategories, setRevenueCategories] = useState([]);
   const [cabs, setCabs] = useState([]);
   const [drivers, setDrivers] = useState([]);
 
-  // Filters
   const [filterStartDate, setFilterStartDate] = useState("");
   const [filterEndDate, setFilterEndDate] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
   const [filterEntityType, setFilterEntityType] = useState("");
-  const [filterEntityId, setFilterEntityId] = useState("");
   const [showActiveOnly, setShowActiveOnly] = useState(true);
   const [searchText, setSearchText] = useState("");
 
-  // Dialogs
   const [openRecurringDialog, setOpenRecurringDialog] = useState(false);
   const [openOneTimeDialog, setOpenOneTimeDialog] = useState(false);
+  const [openRevenueDialog, setOpenRevenueDialog] = useState(false);
+  const [openEditWarningDialog, setOpenEditWarningDialog] = useState(false);
   const [editingRecurring, setEditingRecurring] = useState(null);
   const [editingOneTime, setEditingOneTime] = useState(null);
+  const [editingRevenue, setEditingRevenue] = useState(null);
 
-  // Recurring Expense Form
   const [recurringFormData, setRecurringFormData] = useState({
-    expenseCategoryId: "",
-    entityType: "CAB",
-    entityId: "",
-    shiftType: "",  // ✅ ADDED - For SHIFT entity type
-    amount: "",
-    billingMethod: "MONTHLY",
-    effectiveFrom: "",
-    effectiveTo: "",
-    notes: "",
-    isActive: true,
+    expenseCategoryId: "", entityType: "CAB", entityId: "", shiftType: "", amount: "",
+    billingMethod: "MONTHLY", effectiveFrom: "", effectiveTo: "", notes: "", isActive: true,
+  });
+  
+  const [oneTimeFormData, setOneTimeFormData] = useState({
+    expenseCategoryId: "", entityType: "CAB", entityId: "", shiftType: "", amount: "",
+    expenseDate: new Date().toISOString().split('T')[0], paidBy: "COMPANY",
+    responsibleParty: "COMPANY", description: "", vendor: "", receiptUrl: "",
+    invoiceNumber: "", isReimbursable: false, notes: "",
   });
 
-  // OneTime Expense Form
-  const [oneTimeFormData, setOneTimeFormData] = useState({
-    expenseCategoryId: "",
-    entityType: "CAB",
-    entityId: "",
-    shiftType: "",  // ✅ ADDED - For SHIFT entity type
-    amount: "",
-    expenseDate: new Date().toISOString().split('T')[0],
-    paidBy: "COMPANY",
-    responsibleParty: "COMPANY",
-    description: "",
-    vendor: "",
-    receiptUrl: "",
-    invoiceNumber: "",
-    isReimbursable: false,
-    notes: "",
+  const [revenueFormData, setRevenueFormData] = useState({
+    revenueCategoryId: "", entityType: "DRIVER", entityId: "", shiftType: "", amount: "",
+    revenueDate: new Date().toISOString().split('T')[0], revenueType: "CREDIT",
+    description: "", referenceNumber: "", paymentStatus: "PENDING", paymentMethod: "", notes: "",
   });
 
   const canEdit = ["ADMIN", "MANAGER", "ACCOUNTANT"].includes(currentUser?.role);
-  const canDelete = currentUser?.role === "ADMIN";
 
   useEffect(() => {
     const user = getCurrentUser();
@@ -143,14 +76,9 @@ export default function ExpensesPage() {
       return;
     }
     setCurrentUser(user);
-    
     const today = new Date();
-    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    
-    setFilterStartDate(firstDay.toISOString().split('T')[0]);
-    setFilterEndDate(lastDay.toISOString().split('T')[0]);
-    
+    setFilterStartDate(new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0]);
+    setFilterEndDate(new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0]);
     loadData();
   }, []);
 
@@ -158,10 +86,11 @@ export default function ExpensesPage() {
     setLoading(true);
     try {
       await Promise.all([
-        loadCategories(),
-        loadCabs(),
-        loadDrivers(),
-        loadRecurringExpenses(),
+        loadExpenseCategories(), 
+        loadRevenueCategories(), 
+        loadCabs(), 
+        loadDrivers(), 
+        loadRecurringExpenses()
       ]);
     } catch (err) {
       console.error("Error loading data:", err);
@@ -174,23 +103,27 @@ export default function ExpensesPage() {
   useEffect(() => {
     if (currentTab === 1 && filterStartDate && filterEndDate) {
       loadOneTimeExpenses();
+    } else if (currentTab === 2 && filterStartDate && filterEndDate) {
+      loadOtherRevenues();
     }
-  }, [currentTab, filterStartDate, filterEndDate, filterCategory, filterEntityType, filterEntityId]);
+  }, [currentTab, filterStartDate, filterEndDate]);
 
-  // ==================== Load Data Functions ====================
-
-  const loadCategories = async () => {
+  const loadExpenseCategories = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/expense-categories?active=true`, {
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
       });
-      if (response.ok) {
-        const data = await response.json();
-        setCategories(data);
-      }
-    } catch (err) {
-      console.error("Error loading categories:", err);
-    }
+      if (response.ok) setExpenseCategories(await response.json());
+    } catch (err) { console.error(err); }
+  };
+
+  const loadRevenueCategories = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/revenue-categories/active`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      if (response.ok) setRevenueCategories(await response.json());
+    } catch (err) { console.error(err); }
   };
 
   const loadCabs = async () => {
@@ -202,9 +135,7 @@ export default function ExpensesPage() {
         const data = await response.json();
         setCabs(data.sort((a, b) => parseInt(a.cabNumber) - parseInt(b.cabNumber)));
       }
-    } catch (err) {
-      console.error("Error loading cabs:", err);
-    }
+    } catch (err) { console.error(err); }
   };
 
   const loadDrivers = async () => {
@@ -212,53 +143,37 @@ export default function ExpensesPage() {
       const response = await fetch(`${API_BASE_URL}/drivers`, {
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
       });
-      if (response.ok) {
-        const data = await response.json();
-        setDrivers(data);
-      }
-    } catch (err) {
-      console.error("Error loading drivers:", err);
-    }
+      if (response.ok) setDrivers(await response.json());
+    } catch (err) { console.error(err); }
   };
 
   const loadRecurringExpenses = async () => {
     try {
-      const endpoint = showActiveOnly 
-        ? `${API_BASE_URL}/recurring-expenses/active`
-        : `${API_BASE_URL}/recurring-expenses`;
-      
-      const response = await fetch(endpoint, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setRecurringExpenses(data);
-      }
-    } catch (err) {
-      console.error("Error loading recurring expenses:", err);
-    }
+      const endpoint = showActiveOnly ? `${API_BASE_URL}/recurring-expenses/active` : `${API_BASE_URL}/recurring-expenses`;
+      const response = await fetch(endpoint, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
+      if (response.ok) setRecurringExpenses(await response.json());
+    } catch (err) { console.error(err); }
   };
 
   const loadOneTimeExpenses = async () => {
     try {
       const response = await fetch(
         `${API_BASE_URL}/one-time-expenses/between?startDate=${filterStartDate}&endDate=${filterEndDate}`,
-        {
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        }
+        { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }
       );
-      
-      if (response.ok) {
-        const data = await response.json();
-        setOneTimeExpenses(data);
-      }
-    } catch (err) {
-      console.error("Error loading one-time expenses:", err);
-    }
+      if (response.ok) setOneTimeExpenses(await response.json());
+    } catch (err) { console.error(err); }
   };
 
-  // ==================== Recurring Expense Handlers ====================
+  const loadOtherRevenues = async () => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/other-revenues?startDate=${filterStartDate}&endDate=${filterEndDate}`,
+        { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }
+      );
+      if (response.ok) setOtherRevenues(await response.json());
+    } catch (err) { console.error(err); }
+  };
 
   const handleOpenRecurringDialog = (expense = null) => {
     if (expense) {
@@ -267,7 +182,7 @@ export default function ExpensesPage() {
         expenseCategoryId: expense.expenseCategory?.id || "",
         entityType: expense.entityType,
         entityId: expense.entityId,
-        shiftType: expense.shiftType || "",  // ✅ ADDED - Load shiftType from expense
+        shiftType: expense.shiftType || "",
         amount: expense.amount,
         billingMethod: expense.billingMethod,
         effectiveFrom: expense.effectiveFrom,
@@ -278,20 +193,10 @@ export default function ExpensesPage() {
     } else {
       setEditingRecurring(null);
       const today = new Date();
-      const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
-        .toISOString().split('T')[0];
-      
+      const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
       setRecurringFormData({
-        expenseCategoryId: "",
-        entityType: "CAB",
-        entityId: "",
-        shiftType: "",  // ✅ ADDED
-        amount: "",
-        billingMethod: "MONTHLY",
-        effectiveFrom: firstOfMonth,
-        effectiveTo: "",
-        notes: "",
-        isActive: true,
+        expenseCategoryId: "", entityType: "CAB", entityId: "", shiftType: "", amount: "",
+        billingMethod: "MONTHLY", effectiveFrom: firstOfMonth, effectiveTo: "", notes: "", isActive: true,
       });
     }
     setError("");
@@ -300,117 +205,56 @@ export default function ExpensesPage() {
   };
 
   const handleSaveRecurring = async () => {
-    if (!recurringFormData.expenseCategoryId || !recurringFormData.entityId || 
-        !recurringFormData.amount || !recurringFormData.effectiveFrom) {
+    if (!recurringFormData.expenseCategoryId || !recurringFormData.entityId || !recurringFormData.amount || !recurringFormData.effectiveFrom) {
       setError("Category, entity, amount, and effective date are required");
       return;
     }
-
-    // ✅ ADDED - Validate shiftType for SHIFT entity
     if (recurringFormData.entityType === "SHIFT" && !recurringFormData.shiftType) {
-      setError("Shift type (DAY or NIGHT) is required for shift expenses");
+      setError("Shift type required");
       return;
     }
-
     try {
-      const url = editingRecurring
-        ? `${API_BASE_URL}/recurring-expenses/${editingRecurring.id}`
-        : `${API_BASE_URL}/recurring-expenses`;
-      
+      const url = editingRecurring ? `${API_BASE_URL}/recurring-expenses/${editingRecurring.id}` : `${API_BASE_URL}/recurring-expenses`;
       const response = await fetch(url, {
         method: editingRecurring ? "PUT" : "POST",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-          "Content-Type": "application/json",
-        },
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}`, "Content-Type": "application/json" },
         body: JSON.stringify(recurringFormData),
       });
-
       if (response.ok) {
-        setSuccess(editingRecurring ? "Recurring expense updated" : "Recurring expense created");
+        setSuccess(editingRecurring ? "Updated" : "Created");
         setOpenRecurringDialog(false);
         loadRecurringExpenses();
       } else {
-        const errorText = await response.text();
-        setError(errorText || "Failed to save recurring expense");
+        setError(await response.text() || "Failed");
       }
     } catch (err) {
-      console.error("Error saving recurring expense:", err);
-      setError(`Failed to save: ${err.message}`);
+      setError(err.message);
     }
-  };
-
-  const handleDeleteRecurring = async (id) => {
-    setDeleteWarningData({
-      type: 'recurring',
-      error: 'Recurring expenses cannot be deleted',
-      reason: 'Deleting recurring expenses would corrupt historical financial records and make past calculations impossible to verify. These expenses are referenced in monthly calculations, reports, and audit trails.',
-      solution: 'Use the deactivate button (toggle icon) to stop this expense. Set an "Effective To" date to end it at a specific time. The expense will remain in the system for historical accuracy but won\'t be charged going forward.'
-    });
-    setDeleteWarningDialog(true);
   };
 
   const handleToggleRecurringActive = async (id, currentStatus) => {
     try {
-      const endpoint = currentStatus 
-        ? `${API_BASE_URL}/recurring-expenses/${id}/deactivate`
-        : `${API_BASE_URL}/recurring-expenses/${id}/reactivate`;
-      
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-      });
-
+      const endpoint = currentStatus ? `${API_BASE_URL}/recurring-expenses/${id}/deactivate` : `${API_BASE_URL}/recurring-expenses/${id}/reactivate`;
+      const response = await fetch(endpoint, { method: "POST", headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
       if (response.ok || response.status === 204) {
-        setSuccess(`Recurring expense ${currentStatus ? 'deactivated' : 'activated'}`);
+        setSuccess(`${currentStatus ? 'Deactivated' : 'Activated'}`);
         loadRecurringExpenses();
-      } else {
-        setError("Failed to toggle expense status");
       }
-    } catch (err) {
-      console.error("Error toggling recurring expense:", err);
-      setError("Failed to toggle expense status");
-    }
+    } catch (err) { setError(err.message); }
   };
-
-  // ==================== OneTime Expense Handlers ====================
 
   const handleOpenOneTimeDialog = (expense = null) => {
     if (expense) {
-      setEditingOneTime(expense);
-      setOneTimeFormData({
-        expenseCategoryId: expense.expenseCategory?.id || "",
-        entityType: expense.entityType,
-        entityId: expense.entityId,
-        shiftType: expense.shiftType || "",  // ✅ ADDED - Load shiftType from expense
-        amount: expense.amount,
-        expenseDate: expense.expenseDate,
-        paidBy: expense.paidBy,
-        responsibleParty: expense.responsibleParty,
-        description: expense.description || "",
-        vendor: expense.vendor || "",
-        receiptUrl: expense.receiptUrl || "",
-        invoiceNumber: expense.invoiceNumber || "",
-        isReimbursable: expense.isReimbursable || false,
-        notes: expense.notes || "",
-      });
+      // Don't allow editing - show warning instead
+      setOpenEditWarningDialog(true);
+      return;
     } else {
       setEditingOneTime(null);
       setOneTimeFormData({
-        expenseCategoryId: "",
-        entityType: "CAB",
-        entityId: "",
-        shiftType: "",  // ✅ ADDED
-        amount: "",
-        expenseDate: new Date().toISOString().split('T')[0],
-        paidBy: "COMPANY",
-        responsibleParty: "COMPANY",
-        description: "",
-        vendor: "",
-        receiptUrl: "",
-        invoiceNumber: "",
-        isReimbursable: false,
-        notes: "",
+        expenseCategoryId: "", entityType: "CAB", entityId: "", shiftType: "", amount: "",
+        expenseDate: new Date().toISOString().split('T')[0], paidBy: "COMPANY",
+        responsibleParty: "COMPANY", description: "", vendor: "", receiptUrl: "",
+        invoiceNumber: "", isReimbursable: false, notes: "",
       });
     }
     setError("");
@@ -419,334 +263,253 @@ export default function ExpensesPage() {
   };
 
   const handleSaveOneTime = async () => {
-    if (!oneTimeFormData.expenseCategoryId || !oneTimeFormData.entityId || 
-        !oneTimeFormData.amount || !oneTimeFormData.expenseDate) {
-      setError("Category, entity, amount, and date are required");
+    if (!oneTimeFormData.expenseCategoryId || !oneTimeFormData.entityId || !oneTimeFormData.amount || !oneTimeFormData.expenseDate) {
+      setError("Required fields missing");
       return;
     }
-
-    // ✅ ADDED - Validate shiftType for SHIFT entity
-    if (oneTimeFormData.entityType === "SHIFT" && !oneTimeFormData.shiftType) {
-      setError("Shift type (DAY or NIGHT) is required for shift expenses");
-      return;
-    }
-
     try {
-      const url = editingOneTime
-        ? `${API_BASE_URL}/one-time-expenses/${editingOneTime.id}`
-        : `${API_BASE_URL}/one-time-expenses`;
-      
+      const url = editingOneTime ? `${API_BASE_URL}/one-time-expenses/${editingOneTime.id}` : `${API_BASE_URL}/one-time-expenses`;
       const response = await fetch(url, {
         method: editingOneTime ? "PUT" : "POST",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-          "Content-Type": "application/json",
-        },
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}`, "Content-Type": "application/json" },
         body: JSON.stringify(oneTimeFormData),
       });
-
       if (response.ok) {
-        setSuccess(editingOneTime ? "Expense updated" : "Expense recorded");
+        setSuccess(editingOneTime ? "Updated" : "Created");
         setOpenOneTimeDialog(false);
         loadOneTimeExpenses();
       } else {
-        const errorText = await response.text();
-        setError(errorText || "Failed to save expense");
+        setError(await response.text() || "Failed");
       }
-    } catch (err) {
-      console.error("Error saving one-time expense:", err);
-      setError(`Failed to save: ${err.message}`);
+    } catch (err) { setError(err.message); }
+  };
+
+  const handleOpenRevenueDialog = (revenue = null) => {
+    if (revenue) {
+      // Don't allow editing - show warning instead
+      setOpenEditWarningDialog(true);
+      return;
+    } else {
+      setEditingRevenue(null);
+      setRevenueFormData({
+        revenueCategoryId: "", entityType: "DRIVER", entityId: "", shiftType: "", amount: "",
+        revenueDate: new Date().toISOString().split('T')[0], revenueType: "CREDIT",
+        description: "", referenceNumber: "", paymentStatus: "PENDING", paymentMethod: "", notes: "",
+      });
     }
+    setError("");
+    setSuccess("");
+    setOpenRevenueDialog(true);
   };
 
-  const handleDeleteOneTime = async (id) => {
-    setDeleteWarningData({
-      type: 'onetime',
-      error: 'Expenses cannot be deleted once entered',
-      reason: 'Deleting expense records would break the audit trail and make financial reconciliation impossible. All expenses must remain in the system for accounting accuracy, tax compliance, and historical reporting.',
-      solution: 'If this expense was entered in error, create a counter entry (reversal) with a negative amount to balance it out. Add a note explaining it\'s a correction. This maintains the complete audit trail while fixing the error.'
-    });
-    setDeleteWarningDialog(true);
+  const handleSaveRevenue = async () => {
+    if (!revenueFormData.revenueCategoryId || !revenueFormData.entityId || !revenueFormData.amount || !revenueFormData.revenueDate) {
+      setError("Required fields missing");
+      return;
+    }
+    try {
+      const selectedEntityPerson =
+        (revenueFormData.entityType === "DRIVER" || revenueFormData.entityType === "OWNER")
+          ? drivers.find((d) => String(d.id) === String(revenueFormData.entityId))
+          : null;
+
+      const payload = {
+        revenueDate: revenueFormData.revenueDate,
+        amount: parseFloat(revenueFormData.amount),
+        entityType: revenueFormData.entityType,
+        entityId: parseInt(revenueFormData.entityId), // ✅ ADDED entityId
+        revenueType: revenueFormData.revenueType,
+        description: revenueFormData.description,
+        referenceNumber: revenueFormData.referenceNumber,
+        paymentStatus: revenueFormData.paymentStatus,
+        paymentMethod: revenueFormData.paymentMethod,
+        notes: revenueFormData.notes,
+        category: { id: revenueFormData.revenueCategoryId },
+      };
+      if (revenueFormData.entityType === "DRIVER" && selectedEntityPerson?.driverNumber != null) {
+        payload.driverNumber = selectedEntityPerson.driverNumber;
+      }
+      if (revenueFormData.entityType === "OWNER" && selectedEntityPerson?.driverNumber != null) {
+        payload.ownerDriverNumber = selectedEntityPerson.driverNumber;
+      }
+      if (revenueFormData.entityType === "DRIVER") payload.driver = { id: revenueFormData.entityId };
+      else if (revenueFormData.entityType === "OWNER") payload.owner = { id: revenueFormData.entityId };
+      else if (revenueFormData.entityType === "CAB") payload.cab = { id: revenueFormData.entityId };
+      else if (revenueFormData.entityType === "SHIFT") payload.shift = { id: revenueFormData.shiftType === "DAY" ? 1 : 2, shiftType: revenueFormData.shiftType };
+      
+      const url = editingRevenue ? `${API_BASE_URL}/other-revenues/${editingRevenue.id}` : `${API_BASE_URL}/other-revenues`;
+      const response = await fetch(url, {
+        method: editingRevenue ? "PUT" : "POST",
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}`, "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (response.ok) {
+        setSuccess(editingRevenue ? "Updated" : "Created");
+        setOpenRevenueDialog(false);
+        loadOtherRevenues();
+      } else {
+        setError(await response.text() || "Failed");
+      }
+    } catch (err) { setError(err.message); }
   };
 
-  // ==================== Helper Functions ====================
-
-  // ✅ UPDATED - Accept shiftType parameter
-  const getEntityDisplay = (entityType, entityId, shiftType) => {
+  const getEntityDisplay = (entityType, entityId, shiftType, driver, owner, cab) => {
     if (entityType === "CAB") {
-      const cab = cabs.find(c => c.id === entityId);
-      return cab ? `Cab ${cab.cabNumber}` : `Cab #${entityId}`;
+      const cabData = cab || cabs.find(c => c.id === entityId);
+      return cabData ? `Cab ${cabData.cabNumber}` : `Cab #${entityId}`;
     } else if (entityType === "SHIFT") {
-      // ✅ CHANGED - Use shiftType instead of entityId
       return shiftType === "DAY" ? "Day Shift" : "Night Shift";
-    } else if (entityType === "DRIVER" || entityType === "OWNER") {
-      const driver = drivers.find(d => d.id === entityId);
-      return driver ? `${driver.firstName} ${driver.lastName}` : `Driver #${entityId}`;
-    } else if (entityType === "COMPANY") {
-      return "Company";
+    } else if (entityType === "DRIVER") {
+      const driverData = driver || drivers.find(d => d.id === entityId);
+      return driverData ? `${driverData.firstName} ${driverData.lastName}` : `Driver #${entityId}`;
+    } else if (entityType === "OWNER") {
+      const ownerData = owner || drivers.find(d => d.id === entityId);
+      return ownerData ? `${ownerData.firstName} ${ownerData.lastName}` : `Owner #${entityId}`;
     }
     return entityType;
   };
 
   const getFilteredRecurring = () => {
     let filtered = recurringExpenses;
-    
-    if (filterCategory) {
-      filtered = filtered.filter(e => e.expenseCategory?.id === parseInt(filterCategory));
-    }
-    
-    if (filterEntityType) {
-      filtered = filtered.filter(e => e.entityType === filterEntityType);
-    }
-    
-    if (filterEntityId) {
-      filtered = filtered.filter(e => e.entityId === parseInt(filterEntityId));
-    }
-    
+    if (filterCategory) filtered = filtered.filter(e => e.expenseCategory?.id === parseInt(filterCategory));
+    if (filterEntityType) filtered = filtered.filter(e => e.entityType === filterEntityType);
     if (searchText) {
       const searchLower = searchText.toLowerCase();
-      filtered = filtered.filter(e =>
-        (e.expenseCategory?.categoryName && e.expenseCategory.categoryName.toLowerCase().includes(searchLower)) ||
-        (e.notes && e.notes.toLowerCase().includes(searchLower))
-      );
+      filtered = filtered.filter(e => (e.expenseCategory?.categoryName?.toLowerCase().includes(searchLower)) || (e.notes?.toLowerCase().includes(searchLower)));
     }
-    
     return filtered;
   };
 
   const getFilteredOneTime = () => {
     let filtered = oneTimeExpenses;
-    
-    if (filterCategory) {
-      filtered = filtered.filter(e => e.expenseCategory?.id === parseInt(filterCategory));
-    }
-    
-    if (filterEntityType) {
-      filtered = filtered.filter(e => e.entityType === filterEntityType);
-    }
-    
-    if (filterEntityId) {
-      filtered = filtered.filter(e => e.entityId === parseInt(filterEntityId));
-    }
-    
+    if (filterCategory) filtered = filtered.filter(e => e.expenseCategory?.id === parseInt(filterCategory));
+    if (filterEntityType) filtered = filtered.filter(e => e.entityType === filterEntityType);
     if (searchText) {
       const searchLower = searchText.toLowerCase();
       filtered = filtered.filter(e =>
-        (e.expenseCategory?.categoryName && e.expenseCategory.categoryName.toLowerCase().includes(searchLower)) ||
-        (e.description && e.description.toLowerCase().includes(searchLower)) ||
-        (e.vendor && e.vendor.toLowerCase().includes(searchLower)) ||
-        (e.invoiceNumber && e.invoiceNumber.toLowerCase().includes(searchLower))
+        (e.expenseCategory?.categoryName?.toLowerCase().includes(searchLower)) ||
+        (e.description?.toLowerCase().includes(searchLower)) ||
+        (e.vendor?.toLowerCase().includes(searchLower))
       );
     }
-    
     return filtered;
   };
 
-  const calculateTotalRecurring = () => {
-    return getFilteredRecurring().reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
+  const getFilteredRevenues = () => {
+    let filtered = otherRevenues;
+    if (filterCategory) filtered = filtered.filter(r => r.category?.id === parseInt(filterCategory));
+    if (filterEntityType) filtered = filtered.filter(r => r.entityType === filterEntityType);
+    if (searchText) {
+      const searchLower = searchText.toLowerCase();
+      filtered = filtered.filter(r =>
+        (r.category?.categoryName?.toLowerCase().includes(searchLower)) ||
+        (r.description?.toLowerCase().includes(searchLower)) ||
+        (r.revenueType?.toLowerCase().includes(searchLower))
+      );
+    }
+    return filtered;
   };
 
-  const calculateTotalOneTime = () => {
-    return getFilteredOneTime().reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
-  };
+  const calculateTotalRecurring = () => getFilteredRecurring().reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
+  const calculateTotalOneTime = () => getFilteredOneTime().reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
+  const calculateTotalRevenue = () => getFilteredRevenues().reduce((sum, r) => sum + parseFloat(r.amount || 0), 0);
 
   const filteredRecurring = getFilteredRecurring();
   const filteredOneTime = getFilteredOneTime();
+  const filteredRevenues = getFilteredRevenues();
 
   if (loading) {
     return (
       <Box>
-        <GlobalNav currentUser={currentUser} title="Expenses" />
-        <Box sx={{ p: 3, textAlign: "center" }}>
-          <Typography>Loading...</Typography>
-        </Box>
+        <GlobalNav currentUser={currentUser} title="Expenses & Revenues" />
+        <Box sx={{ p: 3, textAlign: "center" }}><Typography>Loading...</Typography></Box>
       </Box>
     );
   }
 
   return (
     <Box>
-      <GlobalNav currentUser={currentUser} title="Expenses" />
+      <GlobalNav currentUser={currentUser} title="Expenses & Revenues" />
       <Box sx={{ p: 3 }}>
         <Box sx={{ mb: 3 }}>
-          <Typography variant="h4" fontWeight="bold" gutterBottom>
-            Expense Management
-          </Typography>
-          <Typography variant="body2" color="textSecondary">
-            Manage recurring fixed expenses and one-time variable expenses
-          </Typography>
+          <Typography variant="h4" fontWeight="bold" gutterBottom>Expense & Revenue Management</Typography>
+          <Typography variant="body2" color="textSecondary">Manage recurring expenses, one-time expenses, and other revenues/credits</Typography>
         </Box>
 
-        {success && (
-          <Alert severity="success" onClose={() => setSuccess("")} sx={{ mb: 2 }}>
-            {success}
-          </Alert>
-        )}
-        {error && (
-          <Alert severity="error" onClose={() => setError("")} sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
+        {success && <Alert severity="success" onClose={() => setSuccess("")} sx={{ mb: 2 }}>{success}</Alert>}
+        {error && <Alert severity="error" onClose={() => setError("")} sx={{ mb: 2 }}>{error}</Alert>}
 
         <Grid container spacing={3} sx={{ mb: 3 }}>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <RecurringIcon color="primary" />
-                  <Box>
-                    <Typography color="textSecondary" variant="body2">
-                      Recurring Expenses
-                    </Typography>
-                    <Typography variant="h5">{filteredRecurring.length}</Typography>
-                  </Box>
-                </Box>
-              </CardContent>
-            </Card>
+          <Grid item xs={12} sm={6} md={2.4}>
+            <Card><CardContent><Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <RecurringIcon color="primary" />
+              <Box><Typography color="textSecondary" variant="body2">Recurring Expenses</Typography><Typography variant="h6">{filteredRecurring.length}</Typography></Box>
+            </Box></CardContent></Card>
           </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <MoneyIcon color="primary" />
-                  <Box>
-                    <Typography color="textSecondary" variant="body2">
-                      Recurring Total
-                    </Typography>
-                    <Typography variant="h5">
-                      ${calculateTotalRecurring().toFixed(2)}
-                    </Typography>
-                  </Box>
-                </Box>
-              </CardContent>
-            </Card>
+          <Grid item xs={12} sm={6} md={2.4}>
+            <Card><CardContent><Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <OneTimeIcon color="error" />
+              <Box><Typography color="textSecondary" variant="body2">One-Time Expenses</Typography><Typography variant="h6">{filteredOneTime.length}</Typography></Box>
+            </Box></CardContent></Card>
           </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <OneTimeIcon color="secondary" />
-                  <Box>
-                    <Typography color="textSecondary" variant="body2">
-                      One-Time Expenses
-                    </Typography>
-                    <Typography variant="h5">{filteredOneTime.length}</Typography>
-                  </Box>
-                </Box>
-              </CardContent>
-            </Card>
+          <Grid item xs={12} sm={6} md={2.4}>
+            <Card><CardContent><Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <RevenueIcon color="success" />
+              <Box><Typography color="textSecondary" variant="body2">Other Revenues</Typography><Typography variant="h6">{filteredRevenues.length}</Typography></Box>
+            </Box></CardContent></Card>
           </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <TrendingUpIcon color="success" />
-                  <Box>
-                    <Typography color="textSecondary" variant="body2">
-                      One-Time Total
-                    </Typography>
-                    <Typography variant="h5">
-                      ${calculateTotalOneTime().toFixed(2)}
-                    </Typography>
-                  </Box>
-                </Box>
-              </CardContent>
-            </Card>
+          <Grid item xs={12} sm={6} md={2.4}>
+            <Card><CardContent><Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <TrendingDownIcon color="error" />
+              <Box><Typography color="textSecondary" variant="body2">Expense Total</Typography><Typography variant="h6" color="error">${(calculateTotalRecurring() + calculateTotalOneTime()).toFixed(2)}</Typography></Box>
+            </Box></CardContent></Card>
+          </Grid>
+          <Grid item xs={12} sm={6} md={2.4}>
+            <Card><CardContent><Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <TrendingUpIcon color="success" />
+              <Box><Typography color="textSecondary" variant="body2">Revenue Total</Typography><Typography variant="h6" color="success.main">${calculateTotalRevenue().toFixed(2)}</Typography></Box>
+            </Box></CardContent></Card>
           </Grid>
         </Grid>
 
         <Paper>
-          <Tabs value={currentTab} onChange={(e, newValue) => setCurrentTab(newValue)}>
-            <Tab 
-              label="Recurring Expenses" 
-              icon={<RecurringIcon />} 
-              iconPosition="start" 
-            />
-            <Tab 
-              label="One-Time Expenses" 
-              icon={<OneTimeIcon />} 
-              iconPosition="start" 
-            />
+          <Tabs value={currentTab} onChange={(e, v) => setCurrentTab(v)}>
+            <Tab label="Recurring Expenses" icon={<RecurringIcon />} iconPosition="start" />
+            <Tab label="One-Time Expenses" icon={<OneTimeIcon />} iconPosition="start" />
+            <Tab label="Other Revenues" icon={<RevenueIcon />} iconPosition="start" />
           </Tabs>
 
           {currentTab === 0 && (
             <Box sx={{ p: 3 }}>
-              <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid container spacing={2} sx={{ mb: 2 }}>
                 <Grid item xs={12} md={2}>
                   <FormControl fullWidth size="small">
                     <InputLabel>Category</InputLabel>
-                    <Select
-                      value={filterCategory}
-                      label="Category"
-                      onChange={(e) => setFilterCategory(e.target.value)}
-                    >
-                      <MenuItem value="">All Categories</MenuItem>
-                      {categories.map((cat) => (
-                        <MenuItem key={cat.id} value={cat.id}>
-                          {cat.categoryName}
-                        </MenuItem>
-                      ))}
+                    <Select value={filterCategory} label="Category" onChange={(e) => setFilterCategory(e.target.value)}>
+                      <MenuItem value="">All</MenuItem>
+                      {expenseCategories.map(cat => <MenuItem key={cat.id} value={cat.id}>{cat.categoryName}</MenuItem>)}
                     </Select>
                   </FormControl>
                 </Grid>
                 <Grid item xs={12} md={2}>
                   <FormControl fullWidth size="small">
                     <InputLabel>Entity Type</InputLabel>
-                    <Select
-                      value={filterEntityType}
-                      label="Entity Type"
-                      onChange={(e) => setFilterEntityType(e.target.value)}
-                    >
-                      <MenuItem value="">All Types</MenuItem>
+                    <Select value={filterEntityType} label="Entity Type" onChange={(e) => setFilterEntityType(e.target.value)}>
+                      <MenuItem value="">All</MenuItem>
                       <MenuItem value="CAB">Cab</MenuItem>
                       <MenuItem value="SHIFT">Shift</MenuItem>
-                      <MenuItem value="OWNER">Owner</MenuItem>
-                      <MenuItem value="DRIVER">Driver</MenuItem>
-                      <MenuItem value="COMPANY">Company</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>
                 <Grid item xs={12} md={2}>
-                  <TextField
-                    placeholder="Search..."
-                    value={searchText}
-                    onChange={(e) => setSearchText(e.target.value)}
-                    fullWidth
-                    size="small"
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <SearchIcon />
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
+                  <TextField placeholder="Search..." value={searchText} onChange={(e) => setSearchText(e.target.value)} fullWidth size="small" 
+                    InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> }} />
                 </Grid>
                 <Grid item xs={12} md={2}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={showActiveOnly}
-                        onChange={(e) => {
-                          setShowActiveOnly(e.target.checked);
-                          loadRecurringExpenses();
-                        }}
-                      />
-                    }
-                    label="Active Only"
-                  />
+                  <FormControlLabel control={<Switch checked={showActiveOnly} onChange={(e) => { setShowActiveOnly(e.target.checked); loadRecurringExpenses(); }} />} label="Active Only" />
                 </Grid>
                 <Grid item xs={12} md={4}>
-                  {canEdit && (
-                    <Button
-                      variant="contained"
-                      startIcon={<AddIcon />}
-                      onClick={() => handleOpenRecurringDialog()}
-                      fullWidth
-                    >
-                      Add Recurring Expense
-                    </Button>
-                  )}
+                  {canEdit && <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenRecurringDialog()} fullWidth>Add Recurring Expense</Button>}
                 </Grid>
               </Grid>
 
@@ -756,87 +519,34 @@ export default function ExpensesPage() {
                     <TableRow>
                       <TableCell>Category</TableCell>
                       <TableCell>Entity</TableCell>
-                      <TableCell>Billing Method</TableCell>
+                      <TableCell>Billing</TableCell>
                       <TableCell align="right">Amount</TableCell>
-                      <TableCell>Effective From</TableCell>
-                      <TableCell>Effective To</TableCell>
+                      <TableCell>From</TableCell>
+                      <TableCell>To</TableCell>
                       <TableCell>Status</TableCell>
                       {canEdit && <TableCell align="right">Actions</TableCell>}
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {filteredRecurring.map((expense) => (
+                    {filteredRecurring.map(expense => (
                       <TableRow key={expense.id}>
-                        <TableCell>
-                          <Chip 
-                            label={expense.expenseCategory?.categoryName || "N/A"} 
-                            size="small"
-                            color="primary"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          {/* ✅ UPDATED - Pass shiftType parameter */}
-                          {getEntityDisplay(expense.entityType, expense.entityId, expense.shiftType)}
-                        </TableCell>
-                        <TableCell>
-                          <Chip 
-                            label={expense.billingMethod} 
-                            size="small" 
-                            variant="outlined"
-                          />
-                        </TableCell>
-                        <TableCell align="right">
-                          <Typography variant="body2" fontWeight="bold">
-                            ${parseFloat(expense.amount).toFixed(2)}
-                          </Typography>
-                        </TableCell>
+                        <TableCell><Chip label={expense.expenseCategory?.categoryName} size="small" color="primary" /></TableCell>
+                        <TableCell>{getEntityDisplay(expense.entityType, expense.entityId, expense.shiftType)}</TableCell>
+                        <TableCell><Chip label={expense.billingMethod} size="small" variant="outlined" /></TableCell>
+                        <TableCell align="right"><Typography variant="body2" fontWeight="bold">${parseFloat(expense.amount).toFixed(2)}</Typography></TableCell>
                         <TableCell>{expense.effectiveFrom}</TableCell>
                         <TableCell>{expense.effectiveTo || "Ongoing"}</TableCell>
-                        <TableCell>
-                          <Chip
-                            icon={(expense.isActive === true || expense.isActive === "true" || expense.active === true) ? <ActiveIcon /> : <InactiveIcon />}
-                            label={(expense.isActive === true || expense.isActive === "true" || expense.active === true) ? "Active" : "Inactive"}
-                            color={(expense.isActive === true || expense.isActive === "true" || expense.active === true) ? "success" : "default"}
-                            size="small"
-                          />
-                        </TableCell>
+                        <TableCell><Chip icon={expense.isActive ? <ActiveIcon /> : <InactiveIcon />} label={expense.isActive ? "Active" : "Inactive"} color={expense.isActive ? "success" : "default"} size="small" /></TableCell>
                         {canEdit && (
                           <TableCell align="right">
-                            <IconButton 
-                              size="small" 
-                              onClick={() => handleOpenRecurringDialog(expense)}
-                            >
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                            <IconButton
-                              size="small"
-                              onClick={() => handleToggleRecurringActive(expense.id, expense.isActive)}
-                              color={expense.isActive ? "default" : "success"}
-                            >
+                            <IconButton size="small" onClick={() => handleOpenRecurringDialog(expense)}><EditIcon fontSize="small" /></IconButton>
+                            <IconButton size="small" onClick={() => handleToggleRecurringActive(expense.id, expense.isActive)} color={expense.isActive ? "default" : "success"}>
                               {expense.isActive ? <InactiveIcon fontSize="small" /> : <ActiveIcon fontSize="small" />}
                             </IconButton>
-                            {canDelete && (
-                              <IconButton 
-                                size="small" 
-                                onClick={() => handleDeleteRecurring(expense.id)}
-                                color="error"
-                              >
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            )}
                           </TableCell>
                         )}
                       </TableRow>
                     ))}
-                    {filteredRecurring.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={canEdit ? 8 : 7} align="center">
-                          <Typography color="textSecondary" sx={{ py: 3 }}>
-                            No recurring expenses found
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    )}
                   </TableBody>
                 </Table>
               </TableContainer>
@@ -845,90 +555,19 @@ export default function ExpensesPage() {
 
           {currentTab === 1 && (
             <Box sx={{ p: 3 }}>
-              <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Typography sx={{ fontWeight: 700, color: 'error.main', mb: 2 }}>
+                Once created, you cannot edit this entry as this will mess up the reports. Please create a counter entry (reversal) if you need to correct it.
+              </Typography>
+              <Grid container spacing={2} sx={{ mb: 2 }}>
                 <Grid item xs={12} md={2}>
-                  <TextField
-                    label="Start Date"
-                    type="date"
-                    value={filterStartDate}
-                    onChange={(e) => setFilterStartDate(e.target.value)}
-                    fullWidth
-                    size="small"
-                    InputLabelProps={{ shrink: true }}
-                  />
+                  <TextField label="Start Date" type="date" value={filterStartDate} onChange={(e) => setFilterStartDate(e.target.value)} fullWidth size="small" InputLabelProps={{ shrink: true }} />
                 </Grid>
                 <Grid item xs={12} md={2}>
-                  <TextField
-                    label="End Date"
-                    type="date"
-                    value={filterEndDate}
-                    onChange={(e) => setFilterEndDate(e.target.value)}
-                    fullWidth
-                    size="small"
-                    InputLabelProps={{ shrink: true }}
-                  />
+                  <TextField label="End Date" type="date" value={filterEndDate} onChange={(e) => setFilterEndDate(e.target.value)} fullWidth size="small" InputLabelProps={{ shrink: true }} />
                 </Grid>
+                <Grid item xs={12} md={6}></Grid>
                 <Grid item xs={12} md={2}>
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Category</InputLabel>
-                    <Select
-                      value={filterCategory}
-                      label="Category"
-                      onChange={(e) => setFilterCategory(e.target.value)}
-                    >
-                      <MenuItem value="">All Categories</MenuItem>
-                      {categories.map((cat) => (
-                        <MenuItem key={cat.id} value={cat.id}>
-                          {cat.categoryName}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12} md={2}>
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Entity Type</InputLabel>
-                    <Select
-                      value={filterEntityType}
-                      label="Entity Type"
-                      onChange={(e) => setFilterEntityType(e.target.value)}
-                    >
-                      <MenuItem value="">All Types</MenuItem>
-                      <MenuItem value="CAB">Cab</MenuItem>
-                      <MenuItem value="SHIFT">Shift</MenuItem>
-                      <MenuItem value="OWNER">Owner</MenuItem>
-                      <MenuItem value="DRIVER">Driver</MenuItem>
-                      <MenuItem value="COMPANY">Company</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12} md={2}>
-                  <TextField
-                    placeholder="Search..."
-                    value={searchText}
-                    onChange={(e) => setSearchText(e.target.value)}
-                    fullWidth
-                    size="small"
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <SearchIcon />
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-                </Grid>
-                <Grid item xs={12} md={2}>
-                  {canEdit && (
-                    <Button
-                      variant="contained"
-                      startIcon={<AddIcon />}
-                      onClick={() => handleOpenOneTimeDialog()}
-                      fullWidth
-                    >
-                      Add Expense
-                    </Button>
-                  )}
+                  {canEdit && <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenOneTimeDialog()} fullWidth>Add Expense</Button>}
                 </Grid>
               </Grid>
 
@@ -941,97 +580,69 @@ export default function ExpensesPage() {
                       <TableCell>Entity</TableCell>
                       <TableCell>Description</TableCell>
                       <TableCell>Vendor</TableCell>
-                      <TableCell>Paid By</TableCell>
-                      <TableCell>Responsible</TableCell>
                       <TableCell align="right">Amount</TableCell>
-                      <TableCell>Status</TableCell>
-                      {canEdit && <TableCell align="right">Actions</TableCell>}
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {filteredOneTime.map((expense) => (
+                    {filteredOneTime.map(expense => (
                       <TableRow key={expense.id}>
                         <TableCell>{expense.expenseDate}</TableCell>
-                        <TableCell>
-                          <Chip 
-                            label={expense.expenseCategory?.categoryName || "N/A"} 
-                            size="small"
-                            color="secondary"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          {/* ✅ UPDATED - Pass shiftType parameter */}
-                          {getEntityDisplay(expense.entityType, expense.entityId, expense.shiftType)}
-                        </TableCell>
-                        <TableCell>
-                          {expense.description || "-"}
-                          {expense.invoiceNumber && (
-                            <Typography variant="caption" display="block" color="textSecondary">
-                              Invoice: {expense.invoiceNumber}
-                            </Typography>
-                          )}
-                        </TableCell>
+                        <TableCell><Chip label={expense.expenseCategory?.categoryName} size="small" color="secondary" /></TableCell>
+                        <TableCell>{getEntityDisplay(expense.entityType, expense.entityId, expense.shiftType)}</TableCell>
+                        <TableCell>{expense.description || "-"}</TableCell>
                         <TableCell>{expense.vendor || "-"}</TableCell>
-                        <TableCell>
-                          <Chip label={expense.paidBy} size="small" variant="outlined" />
-                        </TableCell>
-                        <TableCell>
-                          <Chip label={expense.responsibleParty} size="small" variant="outlined" />
-                        </TableCell>
-                        <TableCell align="right">
-                          <Typography variant="body2" fontWeight="bold" color="error">
-                            ${parseFloat(expense.amount).toFixed(2)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Box sx={{ display: "flex", gap: 0.5 }}>
-                            {expense.receiptUrl && (
-                              <Tooltip title="Has Receipt">
-                                <AttachFileIcon fontSize="small" color="success" />
-                              </Tooltip>
-                            )}
-                            {expense.isReimbursable && !expense.isReimbursed && (
-                              <Tooltip title="Pending Reimbursement">
-                                <ReimbursableIcon fontSize="small" color="warning" />
-                              </Tooltip>
-                            )}
-                            {expense.isReimbursed && (
-                              <Tooltip title="Reimbursed">
-                                <CheckCircle fontSize="small" color="success" />
-                              </Tooltip>
-                            )}
-                          </Box>
-                        </TableCell>
-                        {canEdit && (
-                          <TableCell align="right">
-                            <IconButton 
-                              size="small" 
-                              onClick={() => handleOpenOneTimeDialog(expense)}
-                            >
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                            {canDelete && (
-                              <IconButton 
-                                size="small" 
-                                onClick={() => handleDeleteOneTime(expense.id)}
-                                color="error"
-                              >
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            )}
-                          </TableCell>
-                        )}
+                        <TableCell align="right"><Typography variant="body2" fontWeight="bold" color="error">${parseFloat(expense.amount).toFixed(2)}</Typography></TableCell>
                       </TableRow>
                     ))}
-                    {filteredOneTime.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={canEdit ? 10 : 9} align="center">
-                          <Typography color="textSecondary" sx={{ py: 3 }}>
-                            No one-time expenses found for selected date range
-                          </Typography>
-                        </TableCell>
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Box>
+          )}
+
+          {currentTab === 2 && (
+            <Box sx={{ p: 3 }}>
+              <Typography sx={{ fontWeight: 700, color: 'error.main', mb: 2 }}>
+                Once created, you cannot edit this entry as this will mess up the reports. Please create a counter entry (reversal) if you need to correct it.
+              </Typography>
+              <Grid container spacing={2} sx={{ mb: 2 }}>
+                <Grid item xs={12} md={2}>
+                  <TextField label="Start Date" type="date" value={filterStartDate} onChange={(e) => setFilterStartDate(e.target.value)} fullWidth size="small" InputLabelProps={{ shrink: true }} />
+                </Grid>
+                <Grid item xs={12} md={2}>
+                  <TextField label="End Date" type="date" value={filterEndDate} onChange={(e) => setFilterEndDate(e.target.value)} fullWidth size="small" InputLabelProps={{ shrink: true }} />
+                </Grid>
+                <Grid item xs={12} md={6}></Grid>
+                <Grid item xs={12} md={2}>
+                  {canEdit && <Button variant="contained" color="success" startIcon={<AddIcon />} onClick={() => handleOpenRevenueDialog()} fullWidth>Add Revenue</Button>}
+                </Grid>
+              </Grid>
+
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Date</TableCell>
+                      <TableCell>Category</TableCell>
+                      <TableCell>Type</TableCell>
+                      <TableCell>Entity</TableCell>
+                      <TableCell>Description</TableCell>
+                      <TableCell>Payment Status</TableCell>
+                      <TableCell align="right">Amount</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {filteredRevenues.map(revenue => (
+                      <TableRow key={revenue.id}>
+                        <TableCell>{revenue.revenueDate}</TableCell>
+                        <TableCell><Chip label={revenue.category?.categoryName} size="small" color="success" /></TableCell>
+                        <TableCell><Chip label={revenue.revenueType} size="small" variant="outlined" color="success" /></TableCell>
+                        <TableCell>{getEntityDisplay(revenue.entityType, revenue.driver?.id || revenue.owner?.id || revenue.cab?.id, revenue.shift?.shiftType, revenue.driver, revenue.owner, revenue.cab)}</TableCell>
+                        <TableCell>{revenue.description || "-"}</TableCell>
+                        <TableCell><Chip label={revenue.paymentStatus} size="small" color={revenue.paymentStatus === "PAID" ? "success" : "warning"} /></TableCell>
+                        <TableCell align="right"><Typography variant="body2" fontWeight="bold" color="success.main">${parseFloat(revenue.amount).toFixed(2)}</Typography></TableCell>
                       </TableRow>
-                    )}
+                    ))}
                   </TableBody>
                 </Table>
               </TableContainer>
@@ -1040,47 +651,22 @@ export default function ExpensesPage() {
         </Paper>
 
         {/* Recurring Expense Dialog */}
-        <Dialog 
-          open={openRecurringDialog} 
-          onClose={() => setOpenRecurringDialog(false)} 
-          maxWidth="md" 
-          fullWidth
-        >
-          <DialogTitle>
-            {editingRecurring ? "Edit Recurring Expense" : "Add Recurring Expense"}
-          </DialogTitle>
+        <Dialog open={openRecurringDialog} onClose={() => setOpenRecurringDialog(false)} maxWidth="md" fullWidth>
+          <DialogTitle>{editingRecurring ? "Edit Recurring Expense" : "Add Recurring Expense"}</DialogTitle>
           <DialogContent>
             <Grid container spacing={2} sx={{ pt: 2 }}>
               <Grid item xs={12} md={6}>
                 <FormControl fullWidth required>
                   <InputLabel>Category</InputLabel>
-                  <Select
-                    value={recurringFormData.expenseCategoryId}
-                    label="Category"
-                    onChange={(e) => setRecurringFormData({ 
-                      ...recurringFormData, 
-                      expenseCategoryId: e.target.value 
-                    })}
-                  >
-                    {categories.filter(c => c.categoryType === "FIXED").map((cat) => (
-                      <MenuItem key={cat.id} value={cat.id}>
-                        {cat.categoryName}
-                      </MenuItem>
-                    ))}
+                  <Select value={recurringFormData.expenseCategoryId} label="Category" onChange={(e) => setRecurringFormData({ ...recurringFormData, expenseCategoryId: e.target.value })} disabled={!!editingRecurring}>
+                    {expenseCategories.filter(c => c.categoryType === "FIXED").map(cat => <MenuItem key={cat.id} value={cat.id}>{cat.categoryName}</MenuItem>)}
                   </Select>
                 </FormControl>
               </Grid>
               <Grid item xs={12} md={6}>
                 <FormControl fullWidth required>
                   <InputLabel>Billing Method</InputLabel>
-                  <Select
-                    value={recurringFormData.billingMethod}
-                    label="Billing Method"
-                    onChange={(e) => setRecurringFormData({ 
-                      ...recurringFormData, 
-                      billingMethod: e.target.value 
-                    })}
-                  >
+                  <Select value={recurringFormData.billingMethod} label="Billing Method" onChange={(e) => setRecurringFormData({ ...recurringFormData, billingMethod: e.target.value })} disabled={!!editingRecurring}>
                     <MenuItem value="MONTHLY">Monthly</MenuItem>
                     <MenuItem value="DAILY">Daily</MenuItem>
                     <MenuItem value="PER_SHIFT">Per Shift</MenuItem>
@@ -1090,41 +676,29 @@ export default function ExpensesPage() {
               <Grid item xs={12} md={6}>
                 <FormControl fullWidth required>
                   <InputLabel>Entity Type</InputLabel>
-                  <Select
-                    value={recurringFormData.entityType}
-                    label="Entity Type"
-                    onChange={(e) => setRecurringFormData({ 
-                      ...recurringFormData, 
-                      entityType: e.target.value,
-                      entityId: "",
-                      shiftType: ""  // ✅ ADDED - Clear shiftType when changing entity type
-                    })}
-                  >
+                  <Select value={recurringFormData.entityType} label="Entity Type" onChange={(e) => setRecurringFormData({ ...recurringFormData, entityType: e.target.value, entityId: "", shiftType: "" })} disabled={!!editingRecurring}>
                     <MenuItem value="CAB">Cab</MenuItem>
                     <MenuItem value="SHIFT">Shift</MenuItem>
-                    <MenuItem value="OWNER">Owner</MenuItem>
-                    <MenuItem value="DRIVER">Driver</MenuItem>
                     <MenuItem value="COMPANY">Company</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
-              
-              {/* ✅ UPDATED - Show ShiftType dropdown for SHIFT entity */}
               {recurringFormData.entityType === "SHIFT" ? (
                 <Grid item xs={12} md={6}>
                   <FormControl fullWidth required>
                     <InputLabel>Shift Type</InputLabel>
-                    <Select
-                      value={recurringFormData.shiftType}
-                      label="Shift Type"
-                      onChange={(e) => setRecurringFormData({ 
-                        ...recurringFormData, 
-                        shiftType: e.target.value,
-                        entityId: e.target.value === "DAY" ? "1" : "2"  // Set entityId for compatibility
-                      })}
-                    >
+                    <Select value={recurringFormData.shiftType} label="Shift Type" onChange={(e) => setRecurringFormData({ ...recurringFormData, shiftType: e.target.value, entityId: e.target.value === "DAY" ? "1" : "2" })} disabled={!!editingRecurring}>
                       <MenuItem value="DAY">Day Shift</MenuItem>
                       <MenuItem value="NIGHT">Night Shift</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+              ) : recurringFormData.entityType === "CAB" ? (
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth required>
+                    <InputLabel>Cab</InputLabel>
+                    <Select value={recurringFormData.entityId} label="Cab" onChange={(e) => setRecurringFormData({ ...recurringFormData, entityId: e.target.value })} disabled={!!editingRecurring}>
+                      {cabs.map(cab => <MenuItem key={cab.id} value={cab.id}>Cab {cab.cabNumber}</MenuItem>)}
                     </Select>
                   </FormControl>
                 </Grid>
@@ -1132,187 +706,88 @@ export default function ExpensesPage() {
                 <Grid item xs={12} md={6}>
                   <FormControl fullWidth required>
                     <InputLabel>Entity</InputLabel>
-                    <Select
-                      value={recurringFormData.entityId}
-                      label="Entity"
-                      onChange={(e) => setRecurringFormData({ 
-                        ...recurringFormData, 
-                        entityId: e.target.value 
-                      })}
-                    >
-                      {recurringFormData.entityType === "CAB" && cabs.map((cab) => (
-                        <MenuItem key={cab.id} value={cab.id}>
-                          Cab {cab.cabNumber} - {cab.registrationNumber}
-                        </MenuItem>
-                      ))}
-                      {(recurringFormData.entityType === "DRIVER" || 
-                        recurringFormData.entityType === "OWNER") && 
-                        drivers.map((driver) => (
-                        <MenuItem key={driver.id} value={driver.id}>
-                          {driver.firstName} {driver.lastName} - {driver.driverNumber}
-                        </MenuItem>
-                      ))}
-                      {recurringFormData.entityType === "COMPANY" && (
-                        <MenuItem value="1">Company</MenuItem>
-                      )}
+                    <Select value={recurringFormData.entityId} label="Entity" onChange={(e) => setRecurringFormData({ ...recurringFormData, entityId: e.target.value })} disabled={!!editingRecurring}>
+                      <MenuItem value="1">Company</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>
               )}
-
               <Grid item xs={12} md={6}>
-                <TextField
-                  label="Amount"
-                  type="number"
-                  value={recurringFormData.amount}
-                  onChange={(e) => setRecurringFormData({ 
-                    ...recurringFormData, 
-                    amount: e.target.value 
-                  })}
-                  fullWidth
-                  required
-                  InputProps={{
-                    startAdornment: <InputAdornment position="start">$</InputAdornment>,
-                  }}
-                  inputProps={{ step: "0.01", min: "0" }}
-                />
+                <TextField label="Amount" type="number" value={recurringFormData.amount} onChange={(e) => setRecurringFormData({ ...recurringFormData, amount: e.target.value })} 
+                  fullWidth required InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }} inputProps={{ step: "0.01", min: "0" }} disabled={!!editingRecurring} />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField label="Effective From" type="date" value={recurringFormData.effectiveFrom} onChange={(e) => setRecurringFormData({ ...recurringFormData, effectiveFrom: e.target.value })} 
+                  fullWidth required InputLabelProps={{ shrink: true }} disabled={!!editingRecurring} />
               </Grid>
               <Grid item xs={12} md={6}>
                 <TextField
-                  label="Effective From"
-                  type="date"
-                  value={recurringFormData.effectiveFrom}
-                  onChange={(e) => setRecurringFormData({ 
-                    ...recurringFormData, 
-                    effectiveFrom: e.target.value 
-                  })}
-                  fullWidth
-                  required
-                  InputLabelProps={{ shrink: true }}
-                  helperText="Should be first day of month"
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Effective To (Optional)"
+                  label="End Date (Optional)"
                   type="date"
                   value={recurringFormData.effectiveTo}
-                  onChange={(e) => setRecurringFormData({ 
-                    ...recurringFormData, 
-                    effectiveTo: e.target.value 
-                  })}
+                  onChange={(e) => setRecurringFormData({ ...recurringFormData, effectiveTo: e.target.value })}
                   fullWidth
                   InputLabelProps={{ shrink: true }}
-                  helperText="Leave empty for ongoing"
                 />
               </Grid>
               <Grid item xs={12}>
-                <TextField
-                  label="Notes"
-                  value={recurringFormData.notes}
-                  onChange={(e) => setRecurringFormData({ 
-                    ...recurringFormData, 
-                    notes: e.target.value 
-                  })}
-                  fullWidth
-                  multiline
-                  rows={2}
-                />
+                <TextField label="Notes" value={recurringFormData.notes} onChange={(e) => setRecurringFormData({ ...recurringFormData, notes: e.target.value })} fullWidth multiline rows={2} />
               </Grid>
             </Grid>
             {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setOpenRecurringDialog(false)}>Cancel</Button>
-            <Button onClick={handleSaveRecurring} variant="contained">
-              {editingRecurring ? "Update" : "Save"}
-            </Button>
+            <Button onClick={handleSaveRecurring} variant="contained">{editingRecurring ? "Update" : "Save"}</Button>
           </DialogActions>
         </Dialog>
 
         {/* One-Time Expense Dialog */}
-        <Dialog 
-          open={openOneTimeDialog} 
-          onClose={() => setOpenOneTimeDialog(false)} 
-          maxWidth="md" 
-          fullWidth
-        >
-          <DialogTitle>
-            {editingOneTime ? "Edit Expense" : "Add One-Time Expense"}
-          </DialogTitle>
+        <Dialog open={openOneTimeDialog} onClose={() => setOpenOneTimeDialog(false)} maxWidth="md" fullWidth>
+          <DialogTitle>{editingOneTime ? "Edit Expense" : "Add One-Time Expense"}</DialogTitle>
           <DialogContent>
+            <Typography sx={{ fontWeight: 700, mb: 2 }}>
+              You will not be able to edit the entry once made. You will have to create a counter entry (reversal), so be careful.
+            </Typography>
             <Grid container spacing={2} sx={{ pt: 2 }}>
               <Grid item xs={12} md={6}>
-                <TextField
-                  label="Expense Date"
-                  type="date"
-                  value={oneTimeFormData.expenseDate}
-                  onChange={(e) => setOneTimeFormData({ 
-                    ...oneTimeFormData, 
-                    expenseDate: e.target.value 
-                  })}
-                  fullWidth
-                  required
-                  InputLabelProps={{ shrink: true }}
-                />
+                <TextField label="Expense Date" type="date" value={oneTimeFormData.expenseDate} onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, expenseDate: e.target.value })} 
+                  fullWidth required InputLabelProps={{ shrink: true }} />
               </Grid>
               <Grid item xs={12} md={6}>
                 <FormControl fullWidth required>
                   <InputLabel>Category</InputLabel>
-                  <Select
-                    value={oneTimeFormData.expenseCategoryId}
-                    label="Category"
-                    onChange={(e) => setOneTimeFormData({ 
-                      ...oneTimeFormData, 
-                      expenseCategoryId: e.target.value 
-                    })}
-                  >
-                    {categories.filter(c => c.categoryType === "VARIABLE").map((cat) => (
-                      <MenuItem key={cat.id} value={cat.id}>
-                        {cat.categoryName}
-                      </MenuItem>
-                    ))}
+                  <Select value={oneTimeFormData.expenseCategoryId} label="Category" onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, expenseCategoryId: e.target.value })}>
+                    {expenseCategories.filter(c => c.categoryType === "VARIABLE").map(cat => <MenuItem key={cat.id} value={cat.id}>{cat.categoryName}</MenuItem>)}
                   </Select>
                 </FormControl>
               </Grid>
               <Grid item xs={12} md={6}>
                 <FormControl fullWidth required>
                   <InputLabel>Entity Type</InputLabel>
-                  <Select
-                    value={oneTimeFormData.entityType}
-                    label="Entity Type"
-                    onChange={(e) => setOneTimeFormData({ 
-                      ...oneTimeFormData, 
-                      entityType: e.target.value,
-                      entityId: "",
-                      shiftType: ""  // ✅ ADDED - Clear shiftType when changing entity type
-                    })}
-                  >
+                  <Select value={oneTimeFormData.entityType} label="Entity Type" onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, entityType: e.target.value, entityId: "", shiftType: "" })}>
                     <MenuItem value="CAB">Cab</MenuItem>
                     <MenuItem value="SHIFT">Shift</MenuItem>
-                    <MenuItem value="OWNER">Owner</MenuItem>
-                    <MenuItem value="DRIVER">Driver</MenuItem>
                     <MenuItem value="COMPANY">Company</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
-              
-              {/* ✅ UPDATED - Show ShiftType dropdown for SHIFT entity */}
               {oneTimeFormData.entityType === "SHIFT" ? (
                 <Grid item xs={12} md={6}>
                   <FormControl fullWidth required>
                     <InputLabel>Shift Type</InputLabel>
-                    <Select
-                      value={oneTimeFormData.shiftType}
-                      label="Shift Type"
-                      onChange={(e) => setOneTimeFormData({ 
-                        ...oneTimeFormData, 
-                        shiftType: e.target.value,
-                        entityId: e.target.value === "DAY" ? "1" : "2"  // Set entityId for compatibility
-                      })}
-                    >
+                    <Select value={oneTimeFormData.shiftType} label="Shift Type" onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, shiftType: e.target.value, entityId: e.target.value === "DAY" ? "1" : "2" })}>
                       <MenuItem value="DAY">Day Shift</MenuItem>
                       <MenuItem value="NIGHT">Night Shift</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+              ) : oneTimeFormData.entityType === "CAB" ? (
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth required>
+                    <InputLabel>Cab</InputLabel>
+                    <Select value={oneTimeFormData.entityId} label="Cab" onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, entityId: e.target.value })}>
+                      {cabs.map(cab => <MenuItem key={cab.id} value={cab.id}>Cab {cab.cabNumber}</MenuItem>)}
                     </Select>
                   </FormControl>
                 </Grid>
@@ -1320,256 +795,172 @@ export default function ExpensesPage() {
                 <Grid item xs={12} md={6}>
                   <FormControl fullWidth required>
                     <InputLabel>Entity</InputLabel>
-                    <Select
-                      value={oneTimeFormData.entityId}
-                      label="Entity"
-                      onChange={(e) => setOneTimeFormData({ 
-                        ...oneTimeFormData, 
-                        entityId: e.target.value 
-                      })}
-                    >
-                      {oneTimeFormData.entityType === "CAB" && cabs.map((cab) => (
-                        <MenuItem key={cab.id} value={cab.id}>
-                          Cab {cab.cabNumber} - {cab.registrationNumber}
-                        </MenuItem>
-                      ))}
-                      {(oneTimeFormData.entityType === "DRIVER" || 
-                        oneTimeFormData.entityType === "OWNER") && 
-                        drivers.map((driver) => (
-                        <MenuItem key={driver.id} value={driver.id}>
-                          {driver.firstName} {driver.lastName} - {driver.driverNumber}
-                        </MenuItem>
-                      ))}
-                      {oneTimeFormData.entityType === "COMPANY" && (
-                        <MenuItem value="1">Company</MenuItem>
-                      )}
+                    <Select value={oneTimeFormData.entityId} label="Entity" onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, entityId: e.target.value })}>
+                      <MenuItem value="1">Company</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>
               )}
-
               <Grid item xs={12} md={6}>
-                <TextField
-                  label="Amount"
-                  type="number"
-                  value={oneTimeFormData.amount}
-                  onChange={(e) => setOneTimeFormData({ 
-                    ...oneTimeFormData, 
-                    amount: e.target.value 
-                  })}
-                  fullWidth
-                  required
-                  InputProps={{
-                    startAdornment: <InputAdornment position="start">$</InputAdornment>,
-                  }}
-                  inputProps={{ step: "0.01", min: "0" }}
-                />
+                <TextField label="Amount" type="number" value={oneTimeFormData.amount} onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, amount: e.target.value })} 
+                  fullWidth required InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }} inputProps={{ step: "0.01", min: "0" }} />
               </Grid>
               <Grid item xs={12} md={6}>
-                <FormControl fullWidth required>
-                  <InputLabel>Paid By</InputLabel>
-                  <Select
-                    value={oneTimeFormData.paidBy}
-                    label="Paid By"
-                    onChange={(e) => setOneTimeFormData({ 
-                      ...oneTimeFormData, 
-                      paidBy: e.target.value 
-                    })}
-                  >
-                    <MenuItem value="DRIVER">Driver</MenuItem>
-                    <MenuItem value="OWNER">Owner</MenuItem>
-                    <MenuItem value="COMPANY">Company</MenuItem>
-                    <MenuItem value="THIRD_PARTY">Third Party</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth>
-                  <InputLabel>Responsible Party</InputLabel>
-                  <Select
-                    value={oneTimeFormData.responsibleParty}
-                    label="Responsible Party"
-                    onChange={(e) => setOneTimeFormData({ 
-                      ...oneTimeFormData, 
-                      responsibleParty: e.target.value 
-                    })}
-                  >
-                    <MenuItem value="DRIVER">Driver</MenuItem>
-                    <MenuItem value="OWNER">Owner</MenuItem>
-                    <MenuItem value="COMPANY">Company</MenuItem>
-                    <MenuItem value="SHARED">Shared</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Vendor"
-                  value={oneTimeFormData.vendor}
-                  onChange={(e) => setOneTimeFormData({ 
-                    ...oneTimeFormData, 
-                    vendor: e.target.value 
-                  })}
-                  fullWidth
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Invoice Number"
-                  value={oneTimeFormData.invoiceNumber}
-                  onChange={(e) => setOneTimeFormData({ 
-                    ...oneTimeFormData, 
-                    invoiceNumber: e.target.value 
-                  })}
-                  fullWidth
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Receipt URL"
-                  value={oneTimeFormData.receiptUrl}
-                  onChange={(e) => setOneTimeFormData({ 
-                    ...oneTimeFormData, 
-                    receiptUrl: e.target.value 
-                  })}
-                  fullWidth
-                  placeholder="https://..."
-                />
+                <TextField label="Vendor" value={oneTimeFormData.vendor} onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, vendor: e.target.value })} fullWidth />
               </Grid>
               <Grid item xs={12}>
-                <TextField
-                  label="Description"
-                  value={oneTimeFormData.description}
-                  onChange={(e) => setOneTimeFormData({ 
-                    ...oneTimeFormData, 
-                    description: e.target.value 
-                  })}
-                  fullWidth
-                  multiline
-                  rows={2}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  label="Notes"
-                  value={oneTimeFormData.notes}
-                  onChange={(e) => setOneTimeFormData({ 
-                    ...oneTimeFormData, 
-                    notes: e.target.value 
-                  })}
-                  fullWidth
-                  multiline
-                  rows={2}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={oneTimeFormData.isReimbursable}
-                      onChange={(e) => setOneTimeFormData({ 
-                        ...oneTimeFormData, 
-                        isReimbursable: e.target.checked 
-                      })}
-                    />
-                  }
-                  label="Requires Reimbursement"
-                />
+                <TextField label="Description" value={oneTimeFormData.description} onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, description: e.target.value })} fullWidth multiline rows={2} />
               </Grid>
             </Grid>
             {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setOpenOneTimeDialog(false)}>Cancel</Button>
-            <Button onClick={handleSaveOneTime} variant="contained">
-              {editingOneTime ? "Update" : "Save"}
-            </Button>
+            <Button onClick={handleSaveOneTime} variant="contained">{editingOneTime ? "Update" : "Save"}</Button>
           </DialogActions>
         </Dialog>
 
-        {/* Delete Warning Dialog */}
-        <Dialog 
-          open={deleteWarningDialog} 
-          onClose={() => setDeleteWarningDialog(false)}
-          maxWidth="md"
-          fullWidth
-        >
+        {/* Revenue Dialog */}
+        <Dialog open={openRevenueDialog} onClose={() => setOpenRevenueDialog(false)} maxWidth="md" fullWidth>
+          <DialogTitle sx={{ bgcolor: "success.light" }}>{editingRevenue ? "Edit Revenue" : "Add Other Revenue"}</DialogTitle>
+          <DialogContent>
+            <Typography sx={{ fontWeight: 700, mb: 2 }}>
+              You will not be able to edit the entry once made. You will have to create a counter entry (reversal), so be careful.
+            </Typography>
+            <Grid container spacing={2} sx={{ pt: 2 }}>
+              <Grid item xs={12} md={6}>
+                <TextField label="Revenue Date" type="date" value={revenueFormData.revenueDate} onChange={(e) => setRevenueFormData({ ...revenueFormData, revenueDate: e.target.value })} 
+                  fullWidth required InputLabelProps={{ shrink: true }} />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth required>
+                  <InputLabel>Category</InputLabel>
+                  <Select value={revenueFormData.revenueCategoryId} label="Category" onChange={(e) => setRevenueFormData({ ...revenueFormData, revenueCategoryId: e.target.value })}>
+                    {revenueCategories.map(cat => <MenuItem key={cat.id} value={cat.id}>{cat.categoryName}</MenuItem>)}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth required>
+                  <InputLabel>Revenue Type</InputLabel>
+                  <Select value={revenueFormData.revenueType} label="Revenue Type" onChange={(e) => setRevenueFormData({ ...revenueFormData, revenueType: e.target.value })}>
+                    <MenuItem value="BONUS">Bonus</MenuItem>
+                    <MenuItem value="CREDIT">Credit</MenuItem>
+                    <MenuItem value="ADJUSTMENT">Adjustment</MenuItem>
+                    <MenuItem value="REFERRAL">Referral Fee</MenuItem>
+                    <MenuItem value="INCENTIVE">Incentive</MenuItem>
+                    <MenuItem value="COMMISSION">Commission</MenuItem>
+                    <MenuItem value="OTHER">Other</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth required>
+                  <InputLabel>Entity Type</InputLabel>
+                  <Select value={revenueFormData.entityType} label="Entity Type" onChange={(e) => setRevenueFormData({ ...revenueFormData, entityType: e.target.value, entityId: "", shiftType: "" })}>
+                    <MenuItem value="DRIVER">Driver</MenuItem>
+                    <MenuItem value="OWNER">Owner</MenuItem>
+                    <MenuItem value="CAB">Cab</MenuItem>
+                    <MenuItem value="SHIFT">Shift</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              {revenueFormData.entityType === "SHIFT" ? (
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth required>
+                    <InputLabel>Shift Type</InputLabel>
+                    <Select value={revenueFormData.shiftType} label="Shift Type" onChange={(e) => setRevenueFormData({ ...revenueFormData, shiftType: e.target.value, entityId: e.target.value === "DAY" ? "1" : "2" })}>
+                      <MenuItem value="DAY">Day Shift</MenuItem>
+                      <MenuItem value="NIGHT">Night Shift</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+              ) : revenueFormData.entityType === "CAB" ? (
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth required>
+                    <InputLabel>Cab</InputLabel>
+                    <Select value={revenueFormData.entityId} label="Cab" onChange={(e) => setRevenueFormData({ ...revenueFormData, entityId: e.target.value })}>
+                      {cabs.map(cab => <MenuItem key={cab.id} value={cab.id}>Cab {cab.cabNumber}</MenuItem>)}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              ) : (
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth required>
+                    <InputLabel>Entity</InputLabel>
+                    <Select value={revenueFormData.entityId} label="Entity" onChange={(e) => setRevenueFormData({ ...revenueFormData, entityId: e.target.value })}>
+                      {(revenueFormData.entityType === "DRIVER" || revenueFormData.entityType === "OWNER") && drivers.map(driver => <MenuItem key={driver.id} value={driver.id}>{driver.firstName} {driver.lastName}</MenuItem>)}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              )}
+              <Grid item xs={12} md={6}>
+                <TextField label="Amount" type="number" value={revenueFormData.amount} onChange={(e) => setRevenueFormData({ ...revenueFormData, amount: e.target.value })} 
+                  fullWidth required InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }} inputProps={{ step: "0.01", min: "0" }} />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Payment Status</InputLabel>
+                  <Select value={revenueFormData.paymentStatus} label="Payment Status" onChange={(e) => setRevenueFormData({ ...revenueFormData, paymentStatus: e.target.value })}>
+                    <MenuItem value="PENDING">Pending</MenuItem>
+                    <MenuItem value="PAID">Paid</MenuItem>
+                    <MenuItem value="CANCELLED">Cancelled</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12}>
+                <TextField label="Description" value={revenueFormData.description} onChange={(e) => setRevenueFormData({ ...revenueFormData, description: e.target.value })} fullWidth multiline rows={2} />
+              </Grid>
+            </Grid>
+            {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOpenRevenueDialog(false)}>Cancel</Button>
+            <Button onClick={handleSaveRevenue} variant="contained" color="success">{editingRevenue ? "Update" : "Save"}</Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Edit Warning Dialog */}
+        <Dialog open={openEditWarningDialog} onClose={() => setOpenEditWarningDialog(false)} maxWidth="sm" fullWidth>
           <DialogTitle>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <BlockIcon color="error" fontSize="large" />
-              <Typography variant="h6" color="error">
-                {deleteWarningData.type === 'recurring' 
-                  ? 'Cannot Delete Recurring Expense' 
-                  : 'Cannot Delete Expense Record'}
-              </Typography>
+              <Typography variant="h6" color="error">Editing Not Allowed</Typography>
             </Box>
           </DialogTitle>
-          
           <DialogContent>
             <Alert severity="error" sx={{ mb: 3 }}>
-              <AlertTitle sx={{ fontWeight: 'bold', fontSize: '1.1rem' }}>
-                {deleteWarningData.error}
-              </AlertTitle>
+              <AlertTitle>Cannot Edit Once Entered</AlertTitle>
+              Expenses and revenues are <strong>immutable</strong> once created.
             </Alert>
-
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="subtitle1" color="error" sx={{ fontWeight: 'bold', mb: 1 }}>
-                Why This Rule Exists:
+            
+            <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>Why?</Typography>
+            <Typography paragraph>
+              Editing existing records would change historical financial reports and calculations that have already been generated, 
+              breaking the audit trail and making reconciliation impossible.
+            </Typography>
+            
+            <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>Solution:</Typography>
+            <Box sx={{ p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
+              <Typography paragraph fontWeight="bold">
+                ✅ Create a Counter Entry (Reversal)
               </Typography>
-              <Typography variant="body1" paragraph>
-                {deleteWarningData.reason}
+              <Typography paragraph>
+                1. Create a new entry with the <strong>same details</strong><br/>
+                2. Enter a <strong>negative amount</strong> to reverse the incorrect entry<br/>
+                3. Then create a new entry with the <strong>correct information</strong>
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Example: If you entered $100 by mistake, create a new entry for -$100, then create the correct entry.
               </Typography>
             </Box>
 
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="subtitle1" color="primary" sx={{ fontWeight: 'bold', mb: 1 }}>
-                What You Should Do Instead:
-              </Typography>
-              <Typography variant="body1" paragraph>
-                {deleteWarningData.solution}
-              </Typography>
-            </Box>
-
-            {deleteWarningData.type === 'recurring' && (
-              <Alert severity="info" sx={{ mt: 2 }}>
-                <AlertTitle>Recommended Workflow for Recurring Expenses</AlertTitle>
-                <Typography variant="body2" component="div">
-                  <ol style={{ margin: 0, paddingLeft: '20px' }}>
-                    <li>Click the <strong>Edit</strong> button on the expense</li>
-                    <li>Set the <strong>"Effective To"</strong> date to when it should end</li>
-                    <li>Or click the <strong>Deactivate</strong> button (toggle icon) to stop it immediately</li>
-                    <li>The expense remains in the system for historical accuracy</li>
-                    <li>You can reactivate it later if needed</li>
-                  </ol>
-                </Typography>
-              </Alert>
-            )}
-
-            {deleteWarningData.type === 'onetime' && (
-              <Alert severity="info" sx={{ mt: 2 }}>
-                <AlertTitle>Recommended Workflow for Correcting Errors</AlertTitle>
-                <Typography variant="body2" component="div">
-                  <ol style={{ margin: 0, paddingLeft: '20px' }}>
-                    <li>Click <strong>"Add Expense"</strong> to create a reversal entry</li>
-                    <li>Use the same category and entity as the original expense</li>
-                    <li>Enter a <strong>negative amount</strong> (e.g., -$150.00)</li>
-                    <li>In the description, note: "Reversal of [original expense] - entered in error"</li>
-                    <li>Both entries remain in the system showing the correction</li>
-                    <li>Net effect is zero, maintaining audit trail</li>
-                  </ol>
-                </Typography>
-              </Alert>
-            )}
+            <Alert severity="info" sx={{ mt: 2 }}>
+              This approach maintains the complete financial audit trail and ensures report accuracy.
+            </Alert>
           </DialogContent>
-          
-          <DialogActions sx={{ px: 3, pb: 2 }}>
-            <Button 
-              onClick={() => setDeleteWarningDialog(false)} 
-              variant="contained" 
-              color="primary"
-              size="large"
-            >
-              I Understand
-            </Button>
+          <DialogActions>
+            <Button onClick={() => setOpenEditWarningDialog(false)} variant="contained" color="primary">I Understand</Button>
           </DialogActions>
         </Dialog>
       </Box>
