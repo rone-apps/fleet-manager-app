@@ -664,6 +664,7 @@ export default function ReportsPage() {
               const leaseRevenueShifts = reportData?.leaseRevenue?.leaseItems || reportData?.leaseRevenue?.shifts || reportData?.leaseRevenue?.shiftItems || [];
               const creditCardTransactions = reportData?.creditCardRevenue?.transactionItems || reportData?.creditCardRevenue?.transactions || reportData?.creditCardRevenue?.items || [];
               const chargeItems = reportData?.chargesRevenue?.chargeItems || reportData?.chargesRevenue?.charges || [];
+              const otherRevenueItems = Array.isArray(reportData?.otherRevenue) ? reportData.otherRevenue : [];
 
               const fixedExpenseItems = reportData?.fixedExpenses?.expenseItems || reportData?.fixedExpenses?.expenses || [];
               const leaseExpenseItems = reportData?.leaseExpense?.leaseExpenseItems || [];
@@ -848,6 +849,46 @@ export default function ReportsPage() {
                     </Table>
                   </TableContainer>
 
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                    Other Revenue Items
+                  </Typography>
+                  <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 260 }}>
+                    <Table size="small" stickyHeader>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Date</TableCell>
+                          <TableCell>Category</TableCell>
+                          <TableCell>Type</TableCell>
+                          <TableCell>Description</TableCell>
+                          <TableCell>Payment Status</TableCell>
+                          <TableCell align="right">Amount</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {(Array.isArray(otherRevenueItems) && otherRevenueItems.length > 0) ? (
+                          otherRevenueItems.map((r, idx) => (
+                            <TableRow key={r?.id ?? idx} hover>
+                              <TableCell>{r?.revenueDate || r?.date || r?.createdAt || "-"}</TableCell>
+                              <TableCell>{r?.category?.categoryName || r?.categoryName || "-"}</TableCell>
+                              <TableCell>{r?.revenueType || r?.type || "-"}</TableCell>
+                              <TableCell>{r?.description || r?.notes || "-"}</TableCell>
+                              <TableCell>{r?.paymentStatus || "-"}</TableCell>
+                              <TableCell align="right">${parseFloat(r?.amount || 0).toFixed(2)}</TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={6} align="center">
+                              <Typography variant="body2" color="text.secondary">
+                                No other revenue items found for this period.
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+
                   <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
                     Expense Breakdown
                   </Typography>
@@ -940,6 +981,7 @@ export default function ReportsPage() {
                       <TableHead>
                         <TableRow>
                           <TableCell>Date</TableCell>
+                          <TableCell>Category</TableCell>
                           <TableCell>Description</TableCell>
                           <TableCell>Vendor</TableCell>
                           <TableCell>Paid By</TableCell>
@@ -947,15 +989,26 @@ export default function ReportsPage() {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {(Array.isArray(oneTimeExpenseItems) ? oneTimeExpenseItems : []).map((e, idx) => (
-                          <TableRow key={idx} hover>
-                            <TableCell>{e?.expenseDate || "-"}</TableCell>
-                            <TableCell>{e?.description || "-"}</TableCell>
-                            <TableCell>{e?.vendor || "-"}</TableCell>
-                            <TableCell>{e?.paidBy || "-"}</TableCell>
-                            <TableCell align="right">${parseFloat(e?.amount || 0).toFixed(2)}</TableCell>
+                        {(Array.isArray(oneTimeExpenseItems) && oneTimeExpenseItems.length > 0) ? (
+                          oneTimeExpenseItems.map((e, idx) => (
+                            <TableRow key={e?.id ?? idx} hover>
+                              <TableCell>{e?.expenseDate || e?.startDate || e?.date || "-"}</TableCell>
+                              <TableCell>{e?.expenseCategory?.categoryName || e?.category || e?.categoryName || "-"}</TableCell>
+                              <TableCell>{e?.description || e?.notes || "-"}</TableCell>
+                              <TableCell>{e?.vendor || "-"}</TableCell>
+                              <TableCell>{e?.paidBy || e?.responsibleParty || "-"}</TableCell>
+                              <TableCell align="right">${parseFloat(e?.amount ?? e?.chargedAmount ?? 0).toFixed(2)}</TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={6} align="center">
+                              <Typography variant="body2" color="text.secondary">
+                                No one-time expense items found for this period.
+                              </Typography>
+                            </TableCell>
                           </TableRow>
-                        ))}
+                        )}
                       </TableBody>
                     </Table>
                   </TableContainer>
