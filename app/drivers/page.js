@@ -8,6 +8,7 @@ import {
   Container,
   Typography,
   Button,
+  CircularProgress,
   Table,
   TableBody,
   TableCell,
@@ -67,7 +68,8 @@ export default function DriversPage() {
   const [currentUser, setCurrentUser] = useState(null);
   const [drivers, setDrivers] = useState([]);
   const [filteredDrivers, setFilteredDrivers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [pageLoading, setPageLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   
@@ -125,6 +127,7 @@ export default function DriversPage() {
 
   const loadDrivers = async () => {
     try {
+      setPageLoading(true);
       const response = await fetch(`${API_BASE_URL}/drivers`, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -135,15 +138,24 @@ export default function DriversPage() {
         const data = await response.json();
         console.log("🚗 Drivers loaded:", data);
         console.log("🔍 First driver isOwner:", data[0]?.isOwner, "Type:", typeof data[0]?.isOwner);
-        setDrivers(data);
+        const sortedDrivers = (Array.isArray(data) ? [...data] : []).sort((a, b) => {
+          const nameA = `${a?.firstName || ""} ${a?.lastName || ""}`.trim().toLowerCase();
+          const nameB = `${b?.firstName || ""} ${b?.lastName || ""}`.trim().toLowerCase();
+          return nameA.localeCompare(nameB);
+        });
+        setDrivers(sortedDrivers);
       } else {
         setError("Failed to load drivers");
+        setDrivers([]);
+        setFilteredDrivers([]);
       }
-      setLoading(false);
     } catch (err) {
       console.error("Error loading drivers:", err);
       setError("Failed to load drivers");
-      setLoading(false);
+      setDrivers([]);
+      setFilteredDrivers([]);
+    } finally {
+      setPageLoading(false);
     }
   };
 
@@ -446,63 +458,69 @@ export default function DriversPage() {
 
       {/* Main Content */}
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        {/* Header with Create Button */}
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-            <DirectionsCar sx={{ fontSize: 40, color: "#3e5244" }} />
-            <Typography variant="h4" sx={{ fontWeight: "bold", color: "#3e5244" }}>
-              Driver Management
-            </Typography>
+        {pageLoading ? (
+          <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "50vh" }}>
+            <CircularProgress />
           </Box>
+        ) : (
+          <>
+            {/* Header with Create Button */}
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                <DirectionsCar sx={{ fontSize: 40, color: "#3e5244" }} />
+                <Typography variant="h4" sx={{ fontWeight: "bold", color: "#3e5244" }}>
+                  Driver Management
+                </Typography>
+              </Box>
 
-          {canEdit && (
-            <Button
-              variant="contained"
-              startIcon={<Add />}
-              onClick={() => handleOpenDialog("create")}
-              sx={{
-                backgroundColor: "#3e5244",
-                "&:hover": { backgroundColor: "#2d3d32" },
-              }}
-            >
-              Add Driver
-            </Button>
-          )}
-        </Box>
+              {canEdit && (
+                <Button
+                  variant="contained"
+                  startIcon={<Add />}
+                  onClick={() => handleOpenDialog("create")}
+                  sx={{
+                    backgroundColor: "#3e5244",
+                    "&:hover": { backgroundColor: "#2d3d32" },
+                  }}
+                >
+                  Add Driver
+                </Button>
+              )}
+            </Box>
 
-        {/* Success Message */}
-        {success && (
-          <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess("")}>
-            {success}
-          </Alert>
-        )}
+            {/* Success Message */}
+            {success && (
+              <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess("")}>
+                {success}
+              </Alert>
+            )}
 
-        {/* Error Message */}
-        {error && !openDialog && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError("")}>
-            {error}
-          </Alert>
-        )}
+            {/* Error Message */}
+            {error && !openDialog && (
+              <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError("")}>
+                {error}
+              </Alert>
+            )}
 
-        {/* Search and Filter Section */}
-        <Paper sx={{ p: 2, mb: 3 }}>
-          <Grid container spacing={2} alignItems="center">
-            {/* Search by Name */}
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                placeholder="Search by name, driver#, or license..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Search />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Grid>
+            {/* Search and Filter Section */}
+            <Paper sx={{ p: 2, mb: 3 }}>
+              <Grid container spacing={2} alignItems="center">
+                {/* Search by Name */}
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    fullWidth
+                    placeholder="Search by name, driver#, or license..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Search />
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                </Grid>
 
             {/* Filter by Status */}
             <Grid item xs={12} sm={6} md={3}>
@@ -671,6 +689,9 @@ export default function DriversPage() {
             </TableBody>
           </Table>
         </TableContainer>
+
+          </>
+        )}
       </Container>
 
       {/* Create/Edit Driver Dialog */}

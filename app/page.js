@@ -21,7 +21,8 @@ import {
   Logout,
   Person,
   AccountBalance,
-  LocalTaxi
+  LocalTaxi,
+  CloudUpload
 } from "@mui/icons-material";
 import { getCurrentUser, logout, isAuthenticated } from './lib/api';
 
@@ -264,7 +265,7 @@ export default function HomePage() {
           )}
 
           {/* Expenses Card - Admin, Manager, Accountant, Driver */}
-          {['ADMIN', 'MANAGER', 'ACCOUNTANT', 'DRIVER'].includes(user.role) && (
+          {['ADMIN', 'MANAGER', 'ACCOUNTANT'].includes(user.role) && (
             <Grid item xs={12} sm={6} md={4}>
               <Card 
                 sx={{ 
@@ -281,6 +282,32 @@ export default function HomePage() {
                   </Typography>
                   <Typography variant="body2" color="textSecondary">
                     Track one-time & recurring expenses & revenues
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          )}
+
+          {/* Data Uploads Card - Admin, Manager, Accountant */}
+          {['ADMIN', 'MANAGER', 'ACCOUNTANT'].includes(user.role) && (
+            <Grid item xs={12} sm={6} md={4}>
+              <Card
+                sx={{
+                  cursor: 'pointer',
+                  transition: 'transform 0.2s',
+                  '&:hover': { transform: 'translateY(-4px)', boxShadow: 3 },
+                  border: '2px solid rgba(25, 118, 210, 0.35)',
+                  background: 'linear-gradient(135deg, rgba(25, 118, 210, 0.10) 0%, rgba(156, 39, 176, 0.08) 100%)'
+                }}
+                onClick={() => router.push('/data-uploads')}
+              >
+                <CardContent>
+                  <CloudUpload sx={{ fontSize: 40, color: '#1976d2', mb: 2 }} />
+                  <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                    Data Uploads
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    Upload and import CSV transaction data
                   </Typography>
                 </CardContent>
               </Card>

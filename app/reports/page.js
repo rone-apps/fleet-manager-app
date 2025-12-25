@@ -34,6 +34,10 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   
+  // ✅ Driver-specific state
+  const [isDriverRole, setIsDriverRole] = useState(false);
+  const [currentDriverNumber, setCurrentDriverNumber] = useState(null);
+  
   // ✅ ALL report data cached here - fetched ONCE
   const [reportData, setReportData] = useState(null);
 
@@ -66,7 +70,30 @@ export default function ReportsPage() {
         return;
       }
       setCurrentUser(user);
-      fetchDrivers();
+      
+      // ✅ CHECK IF USER IS DRIVER
+      if (user.role === 'DRIVER') {
+        setIsDriverRole(true);
+        // ✅ Auto-select current driver
+        const driverId = user.driverId;
+        if (driverId) {
+          try {
+            const driverResponse = await axios.get(`${API_BASE_URL}/drivers/${driverId}`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            const driver = driverResponse.data;
+            setCurrentDriverNumber(driver.driverNumber);
+            setSelectedDriver(driver);
+            setDrivers([driver]); // Only show this driver
+          } catch (error) {
+            console.error("Error fetching driver info:", error);
+            setError("Failed to load your driver information");
+          }
+        }
+      } else {
+        setIsDriverRole(false);
+        fetchDrivers(); // Load all drivers for admin/manager/accountant
+      }
     };
     checkAuth();
   }, [router]);
@@ -397,7 +424,7 @@ export default function ReportsPage() {
             Financial Reports
           </Typography>
           <Typography variant="body1" color="text.secondary">
-            Generate detailed revenue and expense reports for drivers
+            {isDriverRole ? "View your financial reports and earnings" : "Generate detailed revenue and expense reports for drivers"}
           </Typography>
         </Box>
 
@@ -414,23 +441,46 @@ export default function ReportsPage() {
           )}
 
           <Grid container spacing={2}>
-            <Grid item xs={12} md={3}>
-              <Autocomplete
-                options={drivers}
-                getOptionLabel={(option) => 
-                  `${option.firstName} ${option.lastName} (${option.driverNumber})`
-                }
-                value={selectedDriver}
-                onChange={(event, newValue) => setSelectedDriver(newValue)}
-                renderInput={(params) => (
-                  <TextField {...params} label="Search Driver" placeholder="Type to search..." />
-                )}
-                isOptionEqualToValue={(option, value) => 
-                  option.driverNumber === value.driverNumber
-                }
-                noOptionsText="No drivers found"
-              />
-            </Grid>
+            {/* ✅ DRIVER DROPDOWN - Hidden for drivers */}
+            {!isDriverRole && (
+              <Grid item xs={12} md={3}>
+                <Autocomplete
+                  options={drivers}
+                  getOptionLabel={(option) => 
+                    `${option.firstName} ${option.lastName} (${option.driverNumber})`
+                  }
+                  value={selectedDriver}
+                  onChange={(event, newValue) => {
+                    setSelectedDriver(newValue);
+                    setReportData(null);
+                  }}
+                  renderInput={(params) => (
+                    <TextField {...params} label="Search Driver" placeholder="Type to search..." />
+                  )}
+                  isOptionEqualToValue={(option, value) => 
+                    option.driverNumber === value.driverNumber
+                  }
+                  noOptionsText="No drivers found"
+                />
+              </Grid>
+            )}
+
+            {/* ✅ DRIVER INFO CARD - Shown for drivers */}
+            {isDriverRole && (
+              <Grid item xs={12} md={3}>
+                <Card sx={{ p: 2, backgroundColor: '#e8f4f8', height: '100%' }}>
+                  <Typography variant="body2" color="textSecondary" sx={{ mb: 0.5 }}>
+                    Driver
+                  </Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                    {selectedDriver ? `${selectedDriver.firstName} ${selectedDriver.lastName}` : 'Loading...'}
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    {currentDriverNumber || 'Loading...'}
+                  </Typography>
+                </Card>
+              </Grid>
+            )}
 
             <Grid item xs={12} md={3}>
               <LocalizationProvider dateAdapter={AdapterDateFns}>
@@ -600,10 +650,10 @@ export default function ReportsPage() {
           <Paper sx={{ p: 6, textAlign: "center" }}>
             <Assessment sx={{ fontSize: 80, color: "#3e5244", opacity: 0.3, mb: 2 }} />
             <Typography variant="h6" color="text.secondary" gutterBottom sx={{ fontWeight: 600 }}>
-              Select Parameters to Generate Reports
+              {isDriverRole ? "Select Date Range to View Your Reports" : "Select Parameters to Generate Reports"}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Choose a driver and date range to view financial reports
+              {isDriverRole ? "Choose a date range to view your financial reports" : "Choose a driver and date range to view financial reports"}
             </Typography>
           </Paper>
         )}
@@ -618,6 +668,7 @@ export default function ReportsPage() {
         )}
       </Container>
 
+      {/* Details Dialog - Same as before */}
       <Dialog open={detailsDialogOpen} onClose={handleCloseDetails} maxWidth="md" fullWidth>
         <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2 }}>
           <Box>
@@ -668,6 +719,63 @@ export default function ReportsPage() {
               const fixedExpenseItems = reportData?.fixedExpenses?.expenseItems || reportData?.fixedExpenses?.expenses || [];
               const leaseExpenseItems = reportData?.leaseExpense?.leaseExpenseItems || [];
               const oneTimeExpenseItems = reportData?.oneTimeExpenses || [];
+
+              const getOneTimeExpenseEntityDisplay = (expense) => {
+                const entityTypeRaw = expense?.entityType || expense?.entity?.entityType || expense?.type || "";
+                const entityType = entityTypeRaw ? String(entityTypeRaw).toUpperCase() : "";
+                const entityId = expense?.entityId ?? expense?.entity?.id ?? expense?.entity?.entityId ?? null;
+
+                if (entityType === "CAB") {
+                  const cabNumber = expense?.cab?.cabNumber || expense?.cabNumber || expense?.cab?.number;
+                  if (cabNumber) return `Cab ${cabNumber}`;
+                  if (entityId != null) return `Cab ${entityId}`;
+                  return "Cab";
+                }
+
+                if (entityType === "SHIFT") {
+                  const shiftType = expense?.shift?.shiftType || expense?.shiftType || expense?.shift?.type;
+                  if (shiftType) {
+                    const shiftTypeStr = String(shiftType).toUpperCase();
+                    if (shiftTypeStr === "DAY") return "Day Shift";
+                    if (shiftTypeStr === "NIGHT") return "Night Shift";
+                    return `${shiftTypeStr} Shift`;
+                  }
+                  if (entityId != null) return `Shift ${entityId}`;
+                  return "Shift";
+                }
+
+                if (entityType === "DRIVER") {
+                  const name = expense?.driver
+                    ? `${expense.driver.firstName || ""} ${expense.driver.lastName || ""}`.trim()
+                    : (expense?.driverName || expense?.entityName || "").trim();
+                  if (name) return name;
+
+                  const driverNumber = expense?.driver?.driverNumber ?? expense?.driverNumber;
+                  if (driverNumber != null) return `Driver ${driverNumber}`;
+                  if (entityId != null) return `Driver ${entityId}`;
+                  return "Driver";
+                }
+
+                if (entityType === "OWNER") {
+                  const name = expense?.owner
+                    ? `${expense.owner.firstName || ""} ${expense.owner.lastName || ""}`.trim()
+                    : (expense?.ownerName || expense?.entityName || "").trim();
+                  if (name) return name;
+
+                  const ownerDriverNumber = expense?.owner?.driverNumber ?? expense?.ownerDriverNumber;
+                  if (ownerDriverNumber != null) return `Owner ${ownerDriverNumber}`;
+                  if (entityId != null) return `Owner ${entityId}`;
+                  return "Owner";
+                }
+
+                if (entityType === "COMPANY") return "Company";
+                if (entityType) {
+                  if (entityId != null) return `${entityType} ${entityId}`;
+                  return entityType;
+                }
+                if (entityId != null) return `Entity ${entityId}`;
+                return "-";
+              };
 
               return (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -941,6 +1049,7 @@ export default function ReportsPage() {
                         <TableRow>
                           <TableCell>Date</TableCell>
                           <TableCell>Description</TableCell>
+                          <TableCell>Entity</TableCell>
                           <TableCell>Vendor</TableCell>
                           <TableCell>Paid By</TableCell>
                           <TableCell align="right">Amount</TableCell>
@@ -951,6 +1060,7 @@ export default function ReportsPage() {
                           <TableRow key={idx} hover>
                             <TableCell>{e?.expenseDate || "-"}</TableCell>
                             <TableCell>{e?.description || "-"}</TableCell>
+                            <TableCell>{getOneTimeExpenseEntityDisplay(e)}</TableCell>
                             <TableCell>{e?.vendor || "-"}</TableCell>
                             <TableCell>{e?.paidBy || "-"}</TableCell>
                             <TableCell align="right">${parseFloat(e?.amount || 0).toFixed(2)}</TableCell>

@@ -678,6 +678,7 @@ export default function ExpensesRevenuesPage() {
                   <InputLabel>Entity Type</InputLabel>
                   <Select value={recurringFormData.entityType} label="Entity Type" onChange={(e) => setRecurringFormData({ ...recurringFormData, entityType: e.target.value, entityId: "", shiftType: "" })} disabled={!!editingRecurring}>
                     <MenuItem value="CAB">Cab</MenuItem>
+                    <MenuItem value="DRIVER">Driver</MenuItem>
                     <MenuItem value="SHIFT">Shift</MenuItem>
                     <MenuItem value="COMPANY">Company</MenuItem>
                   </Select>
@@ -690,6 +691,24 @@ export default function ExpensesRevenuesPage() {
                     <Select value={recurringFormData.shiftType} label="Shift Type" onChange={(e) => setRecurringFormData({ ...recurringFormData, shiftType: e.target.value, entityId: e.target.value === "DAY" ? "1" : "2" })} disabled={!!editingRecurring}>
                       <MenuItem value="DAY">Day Shift</MenuItem>
                       <MenuItem value="NIGHT">Night Shift</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+              ) : recurringFormData.entityType === "DRIVER" ? (
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth required>
+                    <InputLabel>Driver</InputLabel>
+                    <Select
+                      value={recurringFormData.entityId}
+                      label="Driver"
+                      onChange={(e) => setRecurringFormData({ ...recurringFormData, entityId: e.target.value })}
+                      disabled={!!editingRecurring}
+                    >
+                      {drivers.map(driver => (
+                        <MenuItem key={driver.id} value={driver.id}>
+                          {driver.firstName} {driver.lastName} ({driver.driverNumber})
+                        </MenuItem>
+                      ))}
                     </Select>
                   </FormControl>
                 </Grid>
@@ -767,6 +786,7 @@ export default function ExpensesRevenuesPage() {
                   <InputLabel>Entity Type</InputLabel>
                   <Select value={oneTimeFormData.entityType} label="Entity Type" onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, entityType: e.target.value, entityId: "", shiftType: "" })}>
                     <MenuItem value="CAB">Cab</MenuItem>
+                    <MenuItem value="DRIVER">Driver</MenuItem>
                     <MenuItem value="SHIFT">Shift</MenuItem>
                     <MenuItem value="COMPANY">Company</MenuItem>
                   </Select>
@@ -779,6 +799,23 @@ export default function ExpensesRevenuesPage() {
                     <Select value={oneTimeFormData.shiftType} label="Shift Type" onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, shiftType: e.target.value, entityId: e.target.value === "DAY" ? "1" : "2" })}>
                       <MenuItem value="DAY">Day Shift</MenuItem>
                       <MenuItem value="NIGHT">Night Shift</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+              ) : oneTimeFormData.entityType === "DRIVER" ? (
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth required>
+                    <InputLabel>Driver</InputLabel>
+                    <Select
+                      value={oneTimeFormData.entityId}
+                      label="Driver"
+                      onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, entityId: e.target.value })}
+                    >
+                      {drivers.map(driver => (
+                        <MenuItem key={driver.id} value={driver.id}>
+                          {driver.firstName} {driver.lastName} ({driver.driverNumber})
+                        </MenuItem>
+                      ))}
                     </Select>
                   </FormControl>
                 </Grid>

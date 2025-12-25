@@ -36,6 +36,8 @@ import {
   DirectionsCar as CarIcon,
   FilterList as FilterIcon,
   Clear as ClearIcon,
+  ArrowUpward as ArrowUpwardIcon,
+  ArrowDownward as ArrowDownwardIcon,
 } from "@mui/icons-material";
 import GlobalNav from "../components/GlobalNav";
 import { getCurrentUser, isAuthenticated } from "../lib/api";
@@ -81,10 +83,19 @@ export default function TaxiCallerIntegrationPage() {
   // Filter states for Driver Logons
   const [logonsDriverIdFilter, setLogonsDriverIdFilter] = useState("");
   const [logonsDriverNameFilter, setLogonsDriverNameFilter] = useState("");
+  const [logonsVehicleFilter, setLogonsVehicleFilter] = useState("");
+  
+  // Sort states for Driver Logons
+  const [logonsSortField, setLogonsSortField] = useState(null);
+  const [logonsSortDirection, setLogonsSortDirection] = useState("asc");
 
   // Filter states for Driver Jobs
   const [driverJobsDriverIdFilter, setDriverJobsDriverIdFilter] = useState("");
   const [driverJobsDriverNameFilter, setDriverJobsDriverNameFilter] = useState("");
+  
+  // Sort states for Driver Jobs
+  const [driverJobsSortField, setDriverJobsSortField] = useState(null);
+  const [driverJobsSortDirection, setDriverJobsSortDirection] = useState("asc");
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -138,8 +149,39 @@ export default function TaxiCallerIntegrationPage() {
       });
     }
 
+    if (logonsVehicleFilter) {
+      filtered = filtered.filter(log => {
+        const vehicle = log["vehicle.callsign"] || log["vehicle.num"] || "";
+        return vehicle.toString().toLowerCase().includes(logonsVehicleFilter.toLowerCase());
+      });
+    }
+
+    // Apply sorting
+    if (logonsSortField) {
+      filtered.sort((a, b) => {
+        let aValue, bValue;
+        
+        if (logonsSortField === 'vehicle') {
+          const aVehicle = a["vehicle.callsign"] || a["vehicle.num"] || "";
+          const bVehicle = b["vehicle.callsign"] || b["vehicle.num"] || "";
+          // Extract numeric part for natural sorting (e.g., m1, m2, m11)
+          const aNum = parseInt(aVehicle.toString().replace(/\D/g, '')) || 0;
+          const bNum = parseInt(bVehicle.toString().replace(/\D/g, '')) || 0;
+          aValue = aNum;
+          bValue = bNum;
+        } else if (logonsSortField === 'logonTime') {
+          aValue = a["track.start"] || "";
+          bValue = b["track.start"] || "";
+        }
+        
+        if (aValue < bValue) return logonsSortDirection === 'asc' ? -1 : 1;
+        if (aValue > bValue) return logonsSortDirection === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
     setFilteredDriverLogons(filtered);
-  }, [driverLogons, logonsDriverIdFilter, logonsDriverNameFilter]);
+  }, [driverLogons, logonsDriverIdFilter, logonsDriverNameFilter, logonsVehicleFilter, logonsSortField, logonsSortDirection]);
 
   // Apply filters for Driver Jobs
   useEffect(() => {
@@ -158,8 +200,35 @@ export default function TaxiCallerIntegrationPage() {
       );
     }
 
+    // Apply sorting
+    if (driverJobsSortField) {
+      filtered.sort((a, b) => {
+        let aValue, bValue;
+        
+        if (driverJobsSortField === 'vehicle') {
+          const aVehicle = a.vehicle_num || a.vehicle || "";
+          const bVehicle = b.vehicle_num || b.vehicle || "";
+          // Extract numeric part for natural sorting (e.g., m1, m2, m11)
+          const aNum = parseInt(aVehicle.toString().replace(/\D/g, '')) || 0;
+          const bNum = parseInt(bVehicle.toString().replace(/\D/g, '')) || 0;
+          aValue = aNum;
+          bValue = bNum;
+        } else if (driverJobsSortField === 'date') {
+          aValue = a.date || "";
+          bValue = b.date || "";
+        } else if (driverJobsSortField === 'tariff') {
+          aValue = parseFloat(a.tariff || a.fare || 0);
+          bValue = parseFloat(b.tariff || b.fare || 0);
+        }
+        
+        if (aValue < bValue) return driverJobsSortDirection === 'asc' ? -1 : 1;
+        if (aValue > bValue) return driverJobsSortDirection === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
     setFilteredDriverJobs(filtered);
-  }, [driverJobs, driverJobsDriverIdFilter, driverJobsDriverNameFilter]);
+  }, [driverJobs, driverJobsDriverIdFilter, driverJobsDriverNameFilter, driverJobsSortField, driverJobsSortDirection]);
 
   const testConnection = async () => {
     setLoading(true);
@@ -320,7 +389,7 @@ export default function TaxiCallerIntegrationPage() {
     setError("");
     try {
       const response = await fetch(
-        `${API_BASE_URL}/taxicaller/reports/driver-jobs?days=7&offset=0`,
+        `${API_BASE_URL}/taxicaller/reports/driver-jobs?startDate=${startDate}&endDate=${endDate}`,
         {
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         }
@@ -406,11 +475,34 @@ export default function TaxiCallerIntegrationPage() {
   const clearLogonsFilters = () => {
     setLogonsDriverIdFilter("");
     setLogonsDriverNameFilter("");
+    setLogonsVehicleFilter("");
+  };
+
+  const handleLogonsSort = (field) => {
+    if (logonsSortField === field) {
+      // Toggle direction if same field
+      setLogonsSortDirection(logonsSortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // New field, default to ascending
+      setLogonsSortField(field);
+      setLogonsSortDirection('asc');
+    }
   };
 
   const clearDriverJobsFilters = () => {
     setDriverJobsDriverIdFilter("");
     setDriverJobsDriverNameFilter("");
+  };
+
+  const handleDriverJobsSort = (field) => {
+    if (driverJobsSortField === field) {
+      // Toggle direction if same field
+      setDriverJobsSortDirection(driverJobsSortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // New field, default to ascending
+      setDriverJobsSortField(field);
+      setDriverJobsSortDirection('asc');
+    }
   };
 
   if (!currentUser) {
@@ -606,7 +698,7 @@ export default function TaxiCallerIntegrationPage() {
           <Tabs value={currentTab} onChange={(e, val) => setCurrentTab(val)}>
             <Tab label="Account Jobs" />
             <Tab label="Driver Logons" />
-            <Tab label="Driver Jobs (Last 7 Days)" />
+            <Tab label="Driver Jobs" />
           </Tabs>
 
           {/* Tab 0: Account Jobs */}
@@ -781,7 +873,7 @@ export default function TaxiCallerIntegrationPage() {
                 <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
                   <FilterIcon color="action" />
                   <Grid container spacing={2} alignItems="center">
-                    <Grid item xs={12} sm={5}>
+                    <Grid item xs={12} sm={4}>
                       <TextField
                         label="Driver Username"
                         size="small"
@@ -791,7 +883,7 @@ export default function TaxiCallerIntegrationPage() {
                         placeholder="Search by driver username..."
                       />
                     </Grid>
-                    <Grid item xs={12} sm={5}>
+                    <Grid item xs={12} sm={3}>
                       <TextField
                         label="Driver Name"
                         size="small"
@@ -799,6 +891,16 @@ export default function TaxiCallerIntegrationPage() {
                         value={logonsDriverNameFilter}
                         onChange={(e) => setLogonsDriverNameFilter(e.target.value)}
                         placeholder="Search by driver name..."
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={3}>
+                      <TextField
+                        label="Vehicle"
+                        size="small"
+                        fullWidth
+                        value={logonsVehicleFilter}
+                        onChange={(e) => setLogonsVehicleFilter(e.target.value)}
+                        placeholder="Search by vehicle..."
                       />
                     </Grid>
                     <Grid item xs={12} sm={2}>
@@ -813,7 +915,7 @@ export default function TaxiCallerIntegrationPage() {
                     </Grid>
                   </Grid>
                 </Box>
-                {(logonsDriverIdFilter || logonsDriverNameFilter) && (
+                {(logonsDriverIdFilter || logonsDriverNameFilter || logonsVehicleFilter) && (
                   <Typography variant="caption" color="textSecondary" sx={{ mt: 1, display: "block" }}>
                     Showing {filteredDriverLogons.length} of {driverLogons.length} records
                   </Typography>
@@ -843,8 +945,28 @@ export default function TaxiCallerIntegrationPage() {
                       <TableRow>
                         <TableCell>Driver Username</TableCell>
                         <TableCell>Driver Name</TableCell>
-                        <TableCell>Vehicle</TableCell>
-                        <TableCell>Log On Time</TableCell>
+                        <TableCell 
+                          sx={{ cursor: 'pointer', userSelect: 'none', '&:hover': { backgroundColor: '#f5f5f5' } }}
+                          onClick={() => handleLogonsSort('vehicle')}
+                        >
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            Vehicle
+                            {logonsSortField === 'vehicle' && (
+                              logonsSortDirection === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
+                            )}
+                          </Box>
+                        </TableCell>
+                        <TableCell 
+                          sx={{ cursor: 'pointer', userSelect: 'none', '&:hover': { backgroundColor: '#f5f5f5' } }}
+                          onClick={() => handleLogonsSort('logonTime')}
+                        >
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            Log On Time
+                            {logonsSortField === 'logonTime' && (
+                              logonsSortDirection === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
+                            )}
+                          </Box>
+                        </TableCell>
                         <TableCell>Log Off Time</TableCell>
                         <TableCell>Total Hours</TableCell>
                       </TableRow>
@@ -877,7 +999,7 @@ export default function TaxiCallerIntegrationPage() {
           {currentTab === 2 && (
             <Box sx={{ p: 3 }}>
               <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
-                <Typography variant="h6">Driver Job Reports (Last 7 Days)</Typography>
+                <Typography variant="h6">Driver Job Reports</Typography>
                 <Box sx={{ display: "flex", gap: 1 }}>
                   <Button
                     variant="outlined"
@@ -965,11 +1087,41 @@ export default function TaxiCallerIntegrationPage() {
                       <TableRow>
                         <TableCell>Driver ID</TableCell>
                         <TableCell>Driver Name</TableCell>
-                        <TableCell>Date</TableCell>
-                        <TableCell>Vehicle</TableCell>
+                        <TableCell 
+                          sx={{ cursor: 'pointer', userSelect: 'none', '&:hover': { backgroundColor: '#f5f5f5' } }}
+                          onClick={() => handleDriverJobsSort('date')}
+                        >
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            Date
+                            {driverJobsSortField === 'date' && (
+                              driverJobsSortDirection === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
+                            )}
+                          </Box>
+                        </TableCell>
+                        <TableCell 
+                          sx={{ cursor: 'pointer', userSelect: 'none', '&:hover': { backgroundColor: '#f5f5f5' } }}
+                          onClick={() => handleDriverJobsSort('vehicle')}
+                        >
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            Vehicle
+                            {driverJobsSortField === 'vehicle' && (
+                              driverJobsSortDirection === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
+                            )}
+                          </Box>
+                        </TableCell>
                         <TableCell>Pickup</TableCell>
                         <TableCell>Dropoff</TableCell>
-                        <TableCell>Tariff</TableCell>
+                        <TableCell 
+                          sx={{ cursor: 'pointer', userSelect: 'none', '&:hover': { backgroundColor: '#f5f5f5' } }}
+                          onClick={() => handleDriverJobsSort('tariff')}
+                        >
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            Tariff
+                            {driverJobsSortField === 'tariff' && (
+                              driverJobsSortDirection === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
+                            )}
+                          </Box>
+                        </TableCell>
                         <TableCell>Total</TableCell>
                       </TableRow>
                     </TableHead>

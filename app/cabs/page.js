@@ -117,7 +117,16 @@ export default function CabsPage() {
       if (response.ok) {
         const data = await response.json();
         console.log("🚗 Cabs loaded:", data);
-        setCabs(data);
+        
+        // ✅ Sort by cab number (numeric)
+        const sortedCabs = data.sort((a, b) => {
+          // Extract numeric part from cab number (e.g., "CAB-001" -> 1, "CAB-123" -> 123)
+          const numA = parseInt(a.cabNumber?.replace(/\D/g, '') || '0');
+          const numB = parseInt(b.cabNumber?.replace(/\D/g, '') || '0');
+          return numA - numB;
+        });
+        
+        setCabs(sortedCabs);
       } else {
         setError("Failed to load cabs");
       }

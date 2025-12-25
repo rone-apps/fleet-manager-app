@@ -24,22 +24,19 @@ import {
   MenuItem,
   Alert,
   Chip,
-  AppBar,
-  Toolbar,
   Grid,
   InputAdornment,
   FormControl,
   InputLabel,
   Select,
   Tooltip,
+  Autocomplete,
 } from "@mui/material";
 import {
   Add,
   Edit,
   Block,
   CheckCircle,
-  Logout,
-  Person,
   Visibility,
   VisibilityOff,
   Email,
@@ -49,6 +46,8 @@ import {
   Search,
   FilterList,
   Clear,
+  Person,
+  DirectionsCar,
 } from "@mui/icons-material";
 import { getCurrentUser, logout, isAuthenticated, apiRequest, API_BASE_URL } from "../lib/api";
 
@@ -65,6 +64,7 @@ export default function UsersPage() {
   const [currentUser, setCurrentUser] = useState(null);
   const [users, setUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
+  const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -88,7 +88,7 @@ export default function UsersPage() {
     lastName: "",
     phone: "",
     role: "DRIVER",
-    licenseNumber: "",
+    selectedDriver: null, // Store selected driver object
   });
   
   const router = useRouter();
@@ -109,6 +109,7 @@ export default function UsersPage() {
     }
 
     loadUsers();
+    loadDrivers();
   }, [router]);
 
   // Filter users whenever search/filter changes
@@ -133,6 +134,28 @@ export default function UsersPage() {
       setError("Failed to load users. " + err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadDrivers = async () => {
+    try {
+      const response = await apiRequest('/drivers');
+      
+      if (!response.ok) {
+        throw new Error('Failed to load drivers');
+      }
+      
+      const data = await response.json();
+      // Sort drivers by name for easier selection
+      const sortedDrivers = data.sort((a, b) => {
+        const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
+        const nameB = `${b.firstName} ${b.lastName}`.toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+      setDrivers(sortedDrivers);
+    } catch (err) {
+      console.error("Error loading drivers:", err);
+      // Don't set error here as it's not critical for page load
     }
   };
 
@@ -183,7 +206,7 @@ export default function UsersPage() {
         lastName: "",
         phone: "",
         role: "DRIVER",
-        licenseNumber: "",
+        selectedDriver: null,
       });
     } else {
       // Edit mode - populate form with user data
@@ -195,7 +218,7 @@ export default function UsersPage() {
         lastName: user.lastName,
         phone: user.phone || "",
         role: user.role,
-        licenseNumber: "", // Would need to fetch from driver table
+        selectedDriver: null, // Driver can't be changed in edit mode
       });
     }
     
@@ -219,6 +242,14 @@ export default function UsersPage() {
     setError("");
   };
 
+  const handleDriverChange = (event, newValue) => {
+    setFormData((prev) => ({
+      ...prev,
+      selectedDriver: newValue,
+    }));
+    setError("");
+  };
+
   const validateForm = () => {
     if (dialogMode === "create") {
       if (formData.username.length < 3) {
@@ -228,6 +259,12 @@ export default function UsersPage() {
 
       if (formData.password.length < 6) {
         setError("Password must be at least 6 characters");
+        return false;
+      }
+
+      // ✅ CRITICAL: Validate driver selection for DRIVER role
+      if (formData.role === "DRIVER" && !formData.selectedDriver) {
+        setError("Please select an existing driver to link to this user account");
         return false;
       }
     } else {
@@ -246,11 +283,6 @@ export default function UsersPage() {
 
     if (!formData.firstName || !formData.lastName) {
       setError("First name and last name are required");
-      return false;
-    }
-
-    if (formData.role === "DRIVER" && dialogMode === "create" && !formData.licenseNumber) {
-      setError("License number is required for drivers");
       return false;
     }
 
@@ -278,11 +310,12 @@ export default function UsersPage() {
           role: formData.role,
         };
 
+        // ✅ For DRIVER role, include the driver ID
         if (formData.role === "DRIVER") {
-          requestBody.licenseNumber = formData.licenseNumber;
+          requestBody.driverId = formData.selectedDriver.id;
         }
 
-        const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+        const response = await fetch(`${API_BASE_URL}/users`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -293,7 +326,7 @@ export default function UsersPage() {
 
         if (response.ok) {
           const data = await response.json();
-          setSuccess(`User "${formData.username}" created successfully!`);
+          setSuccess(`User "${formData.username}" created successfully and linked to driver ${formData.selectedDriver?.driverNumber || ''}!`);
           handleCloseDialog();
           
           setTimeout(() => {
@@ -376,10 +409,6 @@ export default function UsersPage() {
       console.error("Toggle active error:", err);
       setError("Failed to update user status");
     }
-  };
-
-  const handleLogout = () => {
-    logout();
   };
 
   const getRoleColor = (role) => {
@@ -712,6 +741,7 @@ export default function UsersPage() {
                 label="Role"
                 value={formData.role}
                 onChange={handleChange}
+                disabled={dialogMode === "edit"} // Can't change role in edit mode
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -719,7 +749,7 @@ export default function UsersPage() {
                     </InputAdornment>
                   ),
                 }}
-                helperText="Select user role in the system"
+                helperText={dialogMode === "edit" ? "Role cannot be changed" : "Select user role in the system"}
               >
                 {USER_ROLES.map((role) => (
                   <MenuItem key={role.value} value={role.value}>
@@ -734,25 +764,88 @@ export default function UsersPage() {
               </TextField>
             </Grid>
 
-            {/* License Number (Drivers only, create mode only) */}
+            {/* ✅ DRIVER SELECTION - Only for DRIVER role in create mode */}
             {isDriver && dialogMode === "create" && (
               <Grid item xs={12}>
-                <TextField
-                  required
-                  fullWidth
-                  name="licenseNumber"
-                  label="Driver License Number"
-                  value={formData.licenseNumber}
-                  onChange={handleChange}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <Badge />
-                      </InputAdornment>
-                    ),
+                <Autocomplete
+                  options={drivers}
+                  getOptionLabel={(option) => 
+                    `${option.firstName} ${option.lastName} (${option.driverNumber})`
+                  }
+                  value={formData.selectedDriver}
+                  onChange={handleDriverChange}
+                  isOptionEqualToValue={(option, value) => option.id === value?.id}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      required
+                      label="Select Existing Driver"
+                      placeholder="Type to search drivers..."
+                      helperText="Search by name or driver number - only existing drivers can be linked"
+                      InputProps={{
+                        ...params.InputProps,
+                        startAdornment: (
+                          <>
+                            <InputAdornment position="start">
+                              <DirectionsCar />
+                            </InputAdornment>
+                            {params.InputProps.startAdornment}
+                          </>
+                        ),
+                      }}
+                    />
+                  )}
+                  renderOption={(props, option) => {
+                    const { key, ...otherProps } = props;
+                    return (
+                      <li key={key} {...otherProps}>
+                        <Box>
+                          <Typography variant="body1">
+                            {option.firstName} {option.lastName}
+                          </Typography>
+                          <Typography variant="caption" color="textSecondary">
+                            {option.driverNumber} • {option.phone || 'No phone'} • License: {option.licenseNumber || 'N/A'}
+                          </Typography>
+                        </Box>
+                      </li>
+                    );
                   }}
-                  helperText="Required for driver accounts"
+                  noOptionsText="No drivers found - please create a driver first in the Drivers page"
                 />
+              </Grid>
+            )}
+
+            {/* ✅ INFO MESSAGE - Shown for DRIVER role in create mode */}
+            {isDriver && dialogMode === "create" && (
+              <Grid item xs={12}>
+                <Alert severity="info" icon={<DirectionsCar />}>
+                  <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                    Important: Driver Account Setup
+                  </Typography>
+                  <Typography variant="body2">
+                    • The driver must already exist in the system
+                  </Typography>
+                  <Typography variant="body2">
+                    • If you don't see the driver, create them in the Drivers page first
+                  </Typography>
+                  <Typography variant="body2">
+                    • One driver can only be linked to one user account
+                  </Typography>
+                </Alert>
+              </Grid>
+            )}
+
+            {/* ✅ INFO MESSAGE - Shown for DRIVER role in edit mode */}
+            {formData.role === "DRIVER" && dialogMode === "edit" && editingUser?.driver && (
+              <Grid item xs={12}>
+                <Alert severity="info" icon={<DirectionsCar />}>
+                  <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                    Linked Driver: {editingUser.driver.firstName} {editingUser.driver.lastName}
+                  </Typography>
+                  <Typography variant="caption" color="textSecondary">
+                    Driver Number: {editingUser.driver.driverNumber}
+                  </Typography>
+                </Alert>
               </Grid>
             )}
 

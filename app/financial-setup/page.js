@@ -30,6 +30,8 @@ import {
   Card,
   CardContent,
   Grid,
+  Autocomplete,
+  Tooltip,
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -43,6 +45,8 @@ import {
   AttachMoney as MoneyIcon,
   TrendingUp as RevenueIcon,
   Block as BlockIcon,
+  CreditCard as MerchantIcon,
+  Event as CalendarIcon,
 } from "@mui/icons-material";
 import GlobalNav from "../components/GlobalNav";
 import { getCurrentUser } from "../lib/api";
@@ -115,6 +119,23 @@ export default function FinancialSetupPage() {
     notes: "",
   });
 
+  // Merchant to Cab Mappings
+  const [merchant2CabMappings, setMerchant2CabMappings] = useState([]);
+  const [allCabs, setAllCabs] = useState([]);
+  const [openMerchantMappingDialog, setOpenMerchantMappingDialog] = useState(false);
+  const [editingMerchantMapping, setEditingMerchantMapping] = useState(null);
+  const [merchantMappingFormData, setMerchantMappingFormData] = useState({
+    cabNumber: "",
+    merchantNumber: "",
+    startDate: new Date().toISOString().split('T')[0],
+    endDate: "",
+    notes: "",
+  });
+  const [openEndMappingDialog, setOpenEndMappingDialog] = useState(false);
+  const [endingMapping, setEndingMapping] = useState(null);
+  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [showActiveMappingsOnly, setShowActiveMappingsOnly] = useState(true);
+
   const canEdit = currentUser?.role === "ADMIN" || currentUser?.role === "MANAGER";
   const canDelete = currentUser?.role === "ADMIN";
 
@@ -134,7 +155,9 @@ export default function FinancialSetupPage() {
       await Promise.all([
         loadExpenseCategories(), 
         loadRevenueCategories(),
-        loadLeasePlans()
+        loadLeasePlans(),
+        loadAllCabs(),
+        loadMerchant2CabMappings(),
       ]);
     } catch (err) {
       console.error("Error loading data:", err);
@@ -354,7 +377,7 @@ export default function FinancialSetupPage() {
     }
   };
 
-  // ==================== Lease Plans (keeping existing code) ====================
+  // ==================== Lease Plans ====================
 
   const loadLeasePlans = async () => {
     try {
@@ -372,7 +395,184 @@ export default function FinancialSetupPage() {
     }
   };
 
-  // ... (keep all existing lease plan and lease rate functions)
+  // ==================== Merchant to Cab Mappings ====================
+
+  const loadAllCabs = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/cabs`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setAllCabs(data);
+      }
+    } catch (err) {
+      console.error("Error loading cabs:", err);
+    }
+  };
+
+  const loadMerchant2CabMappings = async () => {
+    try {
+      const endpoint = showActiveMappingsOnly 
+        ? `${API_BASE_URL}/financial/merchant2cab/active`
+        : `${API_BASE_URL}/financial/merchant2cab`;
+      
+      const response = await fetch(endpoint, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setMerchant2CabMappings(data);
+      }
+    } catch (err) {
+      console.error("Error loading merchant2cab mappings:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (currentUser) {
+      loadMerchant2CabMappings();
+    }
+  }, [showActiveMappingsOnly]);
+
+  const handleOpenMerchantMappingDialog = (mapping = null) => {
+    if (mapping) {
+      setEditingMerchantMapping(mapping);
+      setMerchantMappingFormData({
+        cabNumber: mapping.cabNumber,
+        merchantNumber: mapping.merchantNumber,
+        startDate: mapping.startDate,
+        endDate: mapping.endDate || "",
+        notes: mapping.notes || "",
+      });
+    } else {
+      setEditingMerchantMapping(null);
+      setMerchantMappingFormData({
+        cabNumber: "",
+        merchantNumber: "",
+        startDate: new Date().toISOString().split('T')[0],
+        endDate: "",
+        notes: "",
+      });
+    }
+    setError("");
+    setSuccess("");
+    setOpenMerchantMappingDialog(true);
+  };
+
+  const handleSaveMerchantMapping = async () => {
+    if (!merchantMappingFormData.cabNumber || !merchantMappingFormData.merchantNumber) {
+      setError("Cab number and merchant number are required");
+      return;
+    }
+
+    try {
+      const url = editingMerchantMapping
+        ? `${API_BASE_URL}/financial/merchant2cab/${editingMerchantMapping.id}`
+        : `${API_BASE_URL}/financial/merchant2cab`;
+      
+      const payload = {
+        ...merchantMappingFormData,
+        endDate: merchantMappingFormData.endDate || null,
+      };
+      
+      const response = await fetch(url, {
+        method: editingMerchantMapping ? "PUT" : "POST",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        setError(errorData.message || "Failed to save merchant mapping");
+        return;
+      }
+
+      setSuccess(editingMerchantMapping ? "Merchant mapping updated" : "Merchant mapping created");
+      setOpenMerchantMappingDialog(false);
+      loadMerchant2CabMappings();
+    } catch (err) {
+      console.error("Error saving merchant mapping:", err);
+      setError("Failed to save merchant mapping: " + err.message);
+    }
+  };
+
+  const handleOpenEndMappingDialog = (mapping) => {
+    setEndingMapping(mapping);
+    setEndDate(new Date().toISOString().split('T')[0]);
+    setOpenEndMappingDialog(true);
+  };
+
+  const handleEndMerchantMapping = async () => {
+    if (!endDate) {
+      setError("End date is required");
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/financial/merchant2cab/${endingMapping.id}/end?endDate=${endDate}`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        setError(errorData.message || "Failed to end merchant mapping");
+        return;
+      }
+
+      setSuccess("Merchant mapping ended successfully");
+      setOpenEndMappingDialog(false);
+      loadMerchant2CabMappings();
+    } catch (err) {
+      console.error("Error ending merchant mapping:", err);
+      setError("Failed to end merchant mapping: " + err.message);
+    }
+  };
+
+  const handleDeleteMerchantMapping = async (id) => {
+    if (!confirm("Are you sure you want to delete this merchant mapping?")) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/financial/merchant2cab/${id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      });
+
+      if (response.ok) {
+        setSuccess("Merchant mapping deleted successfully");
+        loadMerchant2CabMappings();
+      } else {
+        setError("Failed to delete merchant mapping");
+      }
+    } catch (err) {
+      console.error("Error deleting merchant mapping:", err);
+      setError("Failed to delete merchant mapping");
+    }
+  };
+
+  const getCabDescription = (mapping) => {
+    const parts = [];
+    if (mapping.year) parts.push(mapping.year);
+    if (mapping.make) parts.push(mapping.make);
+    if (mapping.model) parts.push(mapping.model);
+    if (mapping.color) parts.push(mapping.color);
+    return parts.length > 0 ? parts.join(' ') : '-';
+  };
 
   if (!currentUser) return null;
 
@@ -385,7 +585,7 @@ export default function FinancialSetupPage() {
           Financial Configuration
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          Manage expense categories, revenue categories, lease plans, and rates
+          Manage expense categories, revenue categories, lease plans, rates, and merchant mappings
         </Typography>
 
         {error && (
@@ -401,7 +601,7 @@ export default function FinancialSetupPage() {
 
         {/* Statistics Cards */}
         <Grid container spacing={3} sx={{ mb: 3 }}>
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid item xs={12} sm={6} md={2.4}>
             <Card>
               <CardContent>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -416,7 +616,7 @@ export default function FinancialSetupPage() {
               </CardContent>
             </Card>
           </Grid>
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid item xs={12} sm={6} md={2.4}>
             <Card>
               <CardContent>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -431,7 +631,7 @@ export default function FinancialSetupPage() {
               </CardContent>
             </Card>
           </Grid>
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid item xs={12} sm={6} md={2.4}>
             <Card>
               <CardContent>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -446,7 +646,7 @@ export default function FinancialSetupPage() {
               </CardContent>
             </Card>
           </Grid>
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid item xs={12} sm={6} md={2.4}>
             <Card>
               <CardContent>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -461,6 +661,23 @@ export default function FinancialSetupPage() {
               </CardContent>
             </Card>
           </Grid>
+          <Grid item xs={12} sm={6} md={2.4}>
+            <Card>
+              <CardContent>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <MerchantIcon color="info" />
+                  <Box>
+                    <Typography color="textSecondary" variant="body2">
+                      Merchant Mappings
+                    </Typography>
+                    <Typography variant="h5">
+                      {merchant2CabMappings.filter(m => m.active).length}
+                    </Typography>
+                  </Box>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
         </Grid>
 
         {/* Tabs */}
@@ -469,6 +686,7 @@ export default function FinancialSetupPage() {
             <Tab label="Expense Categories" icon={<CategoryIcon />} iconPosition="start" />
             <Tab label="Revenue Categories" icon={<RevenueIcon />} iconPosition="start" />
             <Tab label="Lease Plans & Rates" icon={<ReceiptIcon />} iconPosition="start" />
+            <Tab label="Merchant Mappings" icon={<MerchantIcon />} iconPosition="start" />
           </Tabs>
 
           {/* Tab 0: Expense Categories */}
@@ -622,10 +840,158 @@ export default function FinancialSetupPage() {
             </Box>
           )}
 
-          {/* Tab 2: Lease Plans & Rates (keep existing content) */}
+          {/* Tab 2: Lease Plans & Rates */}
           {currentTab === 2 && (
             <Box sx={{ p: 3 }}>
               <Typography>Lease Plans & Rates (existing content)</Typography>
+            </Box>
+          )}
+
+          {/* Tab 3: Merchant to Cab Mappings */}
+          {currentTab === 3 && (
+            <Box sx={{ p: 3 }}>
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                  <Typography variant="h6">Merchant Number to Cab Mappings</Typography>
+                  <FormControl size="small" sx={{ minWidth: 150 }}>
+                    <Select
+                      value={showActiveMappingsOnly ? "active" : "all"}
+                      onChange={(e) => setShowActiveMappingsOnly(e.target.value === "active")}
+                    >
+                      <MenuItem value="active">Active Only</MenuItem>
+                      <MenuItem value="all">All Mappings</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Box>
+                {canEdit && (
+                  <Button
+                    variant="contained"
+                    color="info"
+                    startIcon={<AddIcon />}
+                    onClick={() => handleOpenMerchantMappingDialog()}
+                  >
+                    Add Merchant Mapping
+                  </Button>
+                )}
+              </Box>
+
+              <TableContainer>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Cab Number</TableCell>
+                      <TableCell>Vehicle</TableCell>
+                      <TableCell>Type</TableCell>
+                      <TableCell>Owner</TableCell>
+                      <TableCell>Merchant Number</TableCell>
+                      <TableCell>Start Date</TableCell>
+                      <TableCell>End Date</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell>Notes</TableCell>
+                      {canEdit && <TableCell align="right">Actions</TableCell>}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {merchant2CabMappings.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={10} align="center" sx={{ py: 4 }}>
+                          <Typography color="text.secondary">
+                            No merchant mappings found
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      merchant2CabMappings.map((mapping) => (
+                        <TableRow key={mapping.id}>
+                          <TableCell>
+                            <Chip label={mapping.cabNumber} size="small" color="primary" />
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {getCabDescription(mapping)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            {mapping.cabType && (
+                              <Chip 
+                                label={mapping.cabType.replace('_', ' ')} 
+                                size="small" 
+                                variant="outlined"
+                              />
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {mapping.ownerDriverName || '-'}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                              {mapping.merchantNumber}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>{mapping.startDate}</TableCell>
+                          <TableCell>{mapping.endDate || 'Current'}</TableCell>
+                          <TableCell>
+                            <Chip
+                              icon={mapping.active ? <ActiveIcon /> : <InactiveIcon />}
+                              label={mapping.active ? "Active" : "Ended"}
+                              color={mapping.active ? "success" : "default"}
+                              size="small"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Tooltip title={mapping.notes || ''}>
+                              <Typography 
+                                variant="body2" 
+                                sx={{ 
+                                  maxWidth: 150, 
+                                  overflow: 'hidden', 
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap'
+                                }}
+                              >
+                                {mapping.notes || '-'}
+                              </Typography>
+                            </Tooltip>
+                          </TableCell>
+                          {canEdit && (
+                            <TableCell align="right">
+                              <IconButton 
+                                size="small" 
+                                onClick={() => handleOpenMerchantMappingDialog(mapping)}
+                                title="Edit"
+                              >
+                                <EditIcon />
+                              </IconButton>
+                              {mapping.active && (
+                                <IconButton 
+                                  size="small" 
+                                  onClick={() => handleOpenEndMappingDialog(mapping)}
+                                  title="End mapping"
+                                  color="warning"
+                                >
+                                  <CalendarIcon />
+                                </IconButton>
+                              )}
+                              {canDelete && (
+                                <IconButton 
+                                  size="small" 
+                                  onClick={() => handleDeleteMerchantMapping(mapping.id)}
+                                  title="Delete"
+                                  color="error"
+                                >
+                                  <DeleteIcon />
+                                </IconButton>
+                              )}
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             </Box>
           )}
         </Paper>
@@ -753,6 +1119,117 @@ export default function FinancialSetupPage() {
           <Button onClick={() => setOpenRevenueCategoryDialog(false)}>Cancel</Button>
           <Button onClick={handleSaveRevenueCategory} variant="contained" color="success">
             {editingRevenueCategory ? "Update" : "Create"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Merchant Mapping Dialog */}
+      <Dialog open={openMerchantMappingDialog} onClose={() => setOpenMerchantMappingDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ bgcolor: "info.light" }}>
+          {editingMerchantMapping ? "Edit Merchant Mapping" : "Add Merchant Mapping"}
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 2 }}>
+            <Autocomplete
+              options={allCabs}
+              getOptionLabel={(option) => `${option.cabNumber} - ${option.make || ''} ${option.model || ''}`}
+              value={allCabs.find(c => c.cabNumber === merchantMappingFormData.cabNumber) || null}
+              onChange={(e, newValue) => 
+                setMerchantMappingFormData({ 
+                  ...merchantMappingFormData, 
+                  cabNumber: newValue?.cabNumber || "" 
+                })
+              }
+              disabled={!!editingMerchantMapping}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Cab Number"
+                  required
+                  helperText={editingMerchantMapping ? "Cannot change cab number on existing mapping" : ""}
+                />
+              )}
+            />
+            <TextField
+              label="Merchant Number"
+              value={merchantMappingFormData.merchantNumber}
+              onChange={(e) => setMerchantMappingFormData({ ...merchantMappingFormData, merchantNumber: e.target.value })}
+              required
+              placeholder="e.g., 123456789"
+            />
+            <TextField
+              label="Start Date"
+              type="date"
+              value={merchantMappingFormData.startDate}
+              onChange={(e) => setMerchantMappingFormData({ ...merchantMappingFormData, startDate: e.target.value })}
+              required
+              InputLabelProps={{ shrink: true }}
+            />
+            <TextField
+              label="End Date"
+              type="date"
+              value={merchantMappingFormData.endDate}
+              onChange={(e) => setMerchantMappingFormData({ ...merchantMappingFormData, endDate: e.target.value })}
+              InputLabelProps={{ shrink: true }}
+              helperText="Leave empty for current mapping"
+              inputProps={{
+                min: merchantMappingFormData.startDate
+              }}
+            />
+            <TextField
+              label="Notes"
+              value={merchantMappingFormData.notes}
+              onChange={(e) => setMerchantMappingFormData({ ...merchantMappingFormData, notes: e.target.value })}
+              multiline
+              rows={3}
+              placeholder="Optional notes about this mapping..."
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenMerchantMappingDialog(false)}>Cancel</Button>
+          <Button onClick={handleSaveMerchantMapping} variant="contained" color="info">
+            {editingMerchantMapping ? "Update" : "Create"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* End Mapping Dialog */}
+      <Dialog open={openEndMappingDialog} onClose={() => setOpenEndMappingDialog(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>End Merchant Mapping</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 2 }}>
+            {endingMapping && (
+              <Alert severity="info">
+                <AlertTitle>Ending Mapping</AlertTitle>
+                <Typography variant="body2">
+                  <strong>Cab:</strong> {endingMapping.cabNumber}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Merchant:</strong> {endingMapping.merchantNumber}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Start Date:</strong> {endingMapping.startDate}
+                </Typography>
+              </Alert>
+            )}
+            <TextField
+              label="End Date"
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              required
+              InputLabelProps={{ shrink: true }}
+              inputProps={{
+                min: endingMapping?.startDate
+              }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenEndMappingDialog(false)}>Cancel</Button>
+          <Button onClick={handleEndMerchantMapping} variant="contained" color="warning">
+            End Mapping
           </Button>
         </DialogActions>
       </Dialog>

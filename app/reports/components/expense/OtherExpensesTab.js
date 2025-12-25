@@ -156,6 +156,20 @@ export default function OneTimeExpensesTab({ driverNumber, startDate, endDate, d
     return parseFloat(expense?.amount ?? expense?.chargedAmount ?? expense?.originalAmount ?? 0);
   };
 
+  const getExpenseDescription = (expense) => {
+    const assignedToType = expense?.assignedToType != null ? String(expense.assignedToType).trim() : "";
+    const assignedTo = expense?.assignedTo != null ? String(expense.assignedTo).trim() : "";
+    const splitNote = expense?.splitNote != null ? String(expense.splitNote).trim() : "";
+
+    const assignedPart = (assignedToType || assignedTo)
+      ? `${assignedToType}${assignedToType && assignedTo ? " " : ""}${assignedTo}`.trim()
+      : "";
+
+    const combined = [assignedPart, splitNote].filter(Boolean).join(" - ");
+
+    return combined || expense?.description || "-";
+  };
+
   // Calculate totals
   const calculateTotals = () => {
     const total = expenses.reduce((sum, exp) => sum + getExpenseAmount(exp), 0);
@@ -193,18 +207,71 @@ export default function OneTimeExpensesTab({ driverNumber, startDate, endDate, d
   };
 
   const getEntityDisplay = (expense) => {
-    if (expense.entityType === "CAB" && expense.cab) {
-      return `Cab ${expense.cab.cabNumber}`;
-    } else if (expense.entityType === "SHIFT") {
-      return expense.shiftType === "DAY" ? "Day Shift" : "Night Shift";
-    } else if (expense.entityType === "DRIVER" && expense.driver) {
-      return `${expense.driver.firstName} ${expense.driver.lastName}`;
-    } else if (expense.entityType === "OWNER" && expense.owner) {
-      return `${expense.owner.firstName} ${expense.owner.lastName}`;
-    } else if (expense.entityType === "COMPANY") {
-      return "Company";
+    const entityTypeRaw = (expense?.assignedToType != null && expense?.assignedTo != null)
+      ? `${expense.assignedToType}:${expense.assignedTo}`
+      : (expense?.entityType || expense?.entity?.entityType || expense?.type || "");
+
+    const parsedEntity = typeof entityTypeRaw === "string" && entityTypeRaw.includes(":")
+      ? entityTypeRaw.split(":")
+      : null;
+
+    const entityType = parsedEntity?.[0] ? String(parsedEntity[0]).toUpperCase() : (entityTypeRaw ? String(entityTypeRaw).toUpperCase() : "");
+    const derivedEntityId = parsedEntity?.[1] != null && String(parsedEntity[1]).trim() !== "" ? String(parsedEntity[1]).trim() : null;
+
+    const entityId = derivedEntityId ?? expense?.entityId ?? expense?.entity?.id ?? expense?.entity?.entityId ?? null;
+
+    if (entityType === "CAB") {
+      const cabNumber = expense?.cab?.cabNumber || expense?.cabNumber || expense?.cab?.number;
+      if (cabNumber) return `Cab ${cabNumber}`;
+      if (entityId != null) return `Cab ${entityId}`;
+      return "Cab";
     }
-    return expense.entityType;
+
+    if (entityType === "SHIFT") {
+      const shiftType = expense?.shift?.shiftType || expense?.shiftType || expense?.shift?.type;
+      if (shiftType) {
+        const shiftTypeStr = String(shiftType).toUpperCase();
+        if (shiftTypeStr === "DAY") return "Day Shift";
+        if (shiftTypeStr === "NIGHT") return "Night Shift";
+        return `${shiftTypeStr} Shift`;
+      }
+      if (entityId != null) return `Shift ${entityId}`;
+      return "Shift";
+    }
+
+    if (entityType === "DRIVER") {
+      const name = expense?.driver
+        ? `${expense.driver.firstName || ""} ${expense.driver.lastName || ""}`.trim()
+        : (expense?.driverName || expense?.entityName || "").trim();
+      if (name) return name;
+
+      const driverNumber = expense?.driver?.driverNumber ?? expense?.driverNumber;
+      if (driverNumber != null) return `Driver ${driverNumber}`;
+      if (entityId != null) return `Driver ${entityId}`;
+      return "Driver";
+    }
+
+    if (entityType === "OWNER") {
+      const name = expense?.owner
+        ? `${expense.owner.firstName || ""} ${expense.owner.lastName || ""}`.trim()
+        : (expense?.ownerName || expense?.entityName || "").trim();
+      if (name) return name;
+
+      const ownerDriverNumber = expense?.owner?.driverNumber ?? expense?.ownerDriverNumber;
+      if (ownerDriverNumber != null) return `Owner ${ownerDriverNumber}`;
+      if (entityId != null) return `Owner ${entityId}`;
+      return "Owner";
+    }
+
+    if (entityType === "COMPANY") return "Company";
+
+    if (entityType) {
+      if (entityId != null) return `${entityType} ${entityId}`;
+      return entityType;
+    }
+
+    if (entityId != null) return `Entity ${entityId}`;
+    return "-";
   };
 
   const totals = calculateTotals();
@@ -387,7 +454,7 @@ export default function OneTimeExpensesTab({ driverNumber, startDate, endDate, d
                           <TableCell>{getExpenseDate(expense) || "-"}</TableCell>
                           <TableCell>
                             <Typography variant="body2">
-                              {expense.description || "-"}
+                              {getExpenseDescription(expense)}
                             </Typography>
                             {expense.invoiceNumber && (
                               <Typography variant="caption" color="textSecondary">
@@ -481,7 +548,7 @@ export default function OneTimeExpensesTab({ driverNumber, startDate, endDate, d
                   </TableCell>
                   <TableCell>
                     <Typography variant="body2">
-                      {expense.description || "-"}
+                      {getExpenseDescription(expense)}
                     </Typography>
                     {expense.invoiceNumber && (
                       <Typography variant="caption" display="block" color="textSecondary">
