@@ -1,0 +1,62 @@
+version: 2.1
+
+jobs:
+  build_and_push_frontend:
+    docker:
+      - image: cimg/node:18.20
+    steps:
+      - checkout
+
+      # Enable Docker engine for building images
+      - setup_remote_docker:
+          docker_layer_caching: true
+
+      # Restore npm cache
+      - restore_cache:
+          keys:
+            - v1-npm-{{ checksum "package-lock.json" }}
+            - v1-npm-
+
+      # Install dependencies (lockfile required)
+      - run:
+          name: Install dependencies
+          command: |
+            npm ci
+
+      # Build Next.js app
+      - run:
+          name: Build Next.js
+          command: |
+            npm run build
+
+      # Save npm cache
+      - save_cache:
+          paths:
+            - node_modules
+          key: v1-npm-{{ checksum "package-lock.json" }}
+
+      # Docker Hub login
+      - run:
+          name: DockerHub login
+          command: |
+            echo "$DOCKERHUB_TOKEN" | docker login \
+              -u "$DOCKERHUB_USERNAME" --password-stdin
+
+      # Build Docker image
+      - run:
+          name: Build Docker image
+          command: |
+            docker build \
+              -t $DOCKERHUB_USERNAME/fleet-manager-app-frontend:latest \
+              .
+
+      # Push Docker image
+      - run:
+          name: Push Docker image
+          command: |
+            docker push $DOCKERHUB_USERNAME/fleet-manager-app-frontend:latest
+
+workflows:
+  build_and_push:
+    jobs:
+      - build_and_push_frontend
