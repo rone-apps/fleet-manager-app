@@ -68,7 +68,7 @@ export default function SignInPage() {
       if (response.ok) {
         const data = await response.json();
         
-        // Store authentication data
+        // Store authentication data in localStorage
         localStorage.setItem("token", data.token);
         localStorage.setItem("user", JSON.stringify({
           userId: data.userId,
@@ -80,8 +80,11 @@ export default function SignInPage() {
           driverId: data.driverId
         }));
 
-        // Redirect to dashboard
-        router.push("/");
+        // Also set token in cookie for middleware (expires in 24 hours)
+        document.cookie = `token=${data.token}; path=/; max-age=86400; SameSite=Strict`;
+
+        // Use replace to prevent back button from returning to signin
+        window.location.replace("/");
       } else {
         const errorData = await response.json().catch(() => ({}));
         setError(errorData.message || "Invalid username or password");
