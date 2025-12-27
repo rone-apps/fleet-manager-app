@@ -13,7 +13,10 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# ✅ MUST be set BEFORE build
+ENV NEXT_PUBLIC_API_BASE_URL=http://backend:8080/api
 ENV NEXT_TELEMETRY_DISABLED=1
+
 RUN npm run build
 
 
@@ -23,7 +26,6 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Create non-root user
 RUN addgroup -S nextjs && adduser -S nextjs -G nextjs
 
 RUN mkdir -p /app/public
@@ -33,6 +35,6 @@ COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/next.config.js ./next.config.js
 
 USER nextjs
-EXPOSE 80
+EXPOSE 3000
 
 CMD ["npm", "run", "start"]

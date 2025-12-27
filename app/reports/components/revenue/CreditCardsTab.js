@@ -36,8 +36,7 @@ import {
 } from "@mui/icons-material";
 import { format } from "date-fns";
 import axios from "axios";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
+import { API_BASE_URL } from "../../../lib/api";
 
 // Card type mapping with SVG brand logos and colors
 const CARD_TYPES = {

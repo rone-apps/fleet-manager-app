@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { Box, Button, Typography, Alert, Paper } from "@mui/material";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
+import { API_BASE_URL } from "../../lib/api";
 
 export default function ApiDiagnostic() {
   const [result, setResult] = useState("");

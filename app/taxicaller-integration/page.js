@@ -40,10 +40,8 @@ import {
   ArrowDownward as ArrowDownwardIcon,
 } from "@mui/icons-material";
 import GlobalNav from "../components/GlobalNav";
-import { getCurrentUser, isAuthenticated } from "../lib/api";
+import { getCurrentUser, isAuthenticated, API_BASE_URL } from "../lib/api";
 import { useRouter } from "next/navigation";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
 
 export default function TaxiCallerIntegrationPage() {
   const [currentUser, setCurrentUser] = useState(null);
