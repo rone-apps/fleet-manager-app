@@ -155,14 +155,37 @@ export default function AllChargesTab({
       // Enhanced: Try multiple parameter variations for customer name
       if (filters.customerName) {
         params.append('customerName', filters.customerName);
-        // Also try alternative parameter names the backend might expect
         console.log('🔍 Applying customer name filter:', filters.customerName);
       }
-      if (filters.cabId) params.append('cabId', filters.cabId);
-      if (filters.driverId) params.append('driverId', filters.driverId);
-      if (filters.startDate) params.append('startDate', filters.startDate);
-      if (filters.endDate) params.append('endDate', filters.endDate);
-      if (filters.paidStatus !== 'all') params.append('paid', filters.paidStatus === 'paid');
+      if (filters.cabId) {
+        params.append('cabId', filters.cabId);
+        console.log('🚕 Applying cab filter:', filters.cabId);
+      }
+      if (filters.driverId) {
+        params.append('driverId', filters.driverId);
+        // Try alternative parameter names the backend might expect
+        params.append('driver', filters.driverId);
+        console.log('👤 Applying driver filter:', filters.driverId, 'Type:', typeof filters.driverId);
+        console.log('👤 Trying both driverId and driver parameters');
+      }
+      if (filters.startDate) {
+        params.append('startDate', filters.startDate);
+        // Try alternative parameter names
+        params.append('tripDateFrom', filters.startDate);
+        params.append('fromDate', filters.startDate);
+        console.log('📅 Applying start date filter:', filters.startDate);
+      }
+      if (filters.endDate) {
+        params.append('endDate', filters.endDate);
+        // Try alternative parameter names
+        params.append('tripDateTo', filters.endDate);
+        params.append('toDate', filters.endDate);
+        console.log('📅 Applying end date filter:', filters.endDate);
+      }
+      if (filters.paidStatus !== 'all') {
+        params.append('paid', filters.paidStatus === 'paid');
+        console.log('💰 Applying paid status filter:', filters.paidStatus === 'paid');
+      }
       
       const url = `${API_BASE_URL}/account-charges?${params.toString()}`;
       console.log('🌐 Fetching charges with URL:', url);
@@ -240,6 +263,14 @@ export default function AllChargesTab({
       endDate: filterEndDate,
       paidStatus: filterPaidStatus
     });
+    console.log('📅 Date filter details:', {
+      startDateEmpty: !filterStartDate,
+      endDateEmpty: !filterEndDate,
+      startDateValue: filterStartDate,
+      endDateValue: filterEndDate,
+      startDateType: typeof filterStartDate,
+      endDateType: typeof filterEndDate
+    });
     
     // Apply the current filter values
     setAppliedCustomerName(filterCustomerName);
@@ -313,48 +344,48 @@ export default function AllChargesTab({
     try {
       const token = localStorage.getItem("token");
       
-      // Update each charge
-      const updatePromises = bulkEditAllCharges.map(charge => {
-        // Build update payload with only the fields that should be updated
-        const payload = {
-          id: charge.id,
-          accountId: charge.accountId || charge.accountCustomer?.accountId,
-          subAccount: charge.subAccount || null,
-          jobCode: charge.jobCode,
-          passengerName: charge.passengerName,
-          pickupAddress: charge.pickupAddress,
-          dropoffAddress: charge.dropoffAddress,
-          fareAmount: parseFloat(charge.fareAmount),
-          tipAmount: parseFloat(charge.tipAmount) || 0,
-          tripDate: charge.tripDate,
-          paid: charge.paid,
-          invoiceNumber: charge.invoiceNumber,
-          // Include customer ID separately (not the whole object)
-          accountCustomer: charge.accountCustomer?.id ? { id: charge.accountCustomer.id } : null,
-          // Include cab and driver IDs if they exist
-          cab: charge.cab?.id ? { id: charge.cab.id } : null,
-          driver: charge.driver?.id ? { id: charge.driver.id } : null,
-        };
-
-        return fetch(`${API_BASE_URL}/account-charges/${charge.id}`, {
-          method: "PUT",
-          headers: {
-            "Authorization": `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(payload),
-        });
+      // Find only charges where tip amount has changed
+      const changedCharges = bulkEditAllCharges.filter((editedCharge, index) => {
+        const originalCharge = charges[index];
+        const originalTip = parseFloat(originalCharge.tipAmount) || 0;
+        const editedTip = parseFloat(editedCharge.tipAmount) || 0;
+        return originalTip !== editedTip;
       });
 
-      const responses = await Promise.all(updatePromises);
-      const failedCount = responses.filter(r => !r.ok).length;
+      if (changedCharges.length === 0) {
+        setError("No changes detected");
+        setLoading(false);
+        return;
+      }
 
-      if (failedCount > 0) {
-        setError(`Failed to update ${failedCount} charge(s)`);
-      } else {
+      console.log(`💾 Saving ${changedCharges.length} changed charges in bulk`);
+      
+      // Prepare batch update payload with only tip amounts
+      const bulkUpdatePayload = changedCharges.map(charge => ({
+        id: charge.id,
+        tipAmount: parseFloat(charge.tipAmount) || 0
+      }));
+
+      // Send all changes in one request
+      const response = await fetch(`${API_BASE_URL}/account-charges/bulk-update-tips`, {
+        method: "PUT",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(bulkUpdatePayload),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`✅ Successfully updated ${changedCharges.length} charges`);
         setAllChargesBulkEdit(false);
         setBulkEditAllCharges([]);
         loadChargesWithPagination(); // Reload data
+      } else {
+        const errorText = await response.text();
+        console.error('❌ Bulk update failed:', errorText);
+        setError(`Failed to update charges: ${response.status}`);
       }
     } catch (err) {
       console.error("Error saving bulk edits:", err);
@@ -434,9 +465,12 @@ export default function AllChargesTab({
               size="small"
               options={sortedDrivers}
               getOptionLabel={(option) => option ? `${option.firstName} ${option.lastName}` : ""}
+              getOptionKey={(option) => `driver-${option.id}-${option.firstName}-${option.lastName}`}
               value={sortedDrivers.find(driver => driver.id === filterDriverId) || null}
               onChange={(event, newValue) => {
-                setFilterDriverId(newValue ? newValue.id : "");
+                const driverId = newValue ? newValue.id : "";
+                console.log('👤 Driver selected:', newValue ? `${newValue.firstName} ${newValue.lastName}` : 'None', 'ID:', driverId);
+                setFilterDriverId(driverId);
               }}
               renderInput={(params) => (
                 <TextField
@@ -656,54 +690,17 @@ export default function AllChargesTab({
                   </Typography>
                 </TableCell>
                 <TableCell>{charge.tripDate}</TableCell>
-                <TableCell>
-                  <TextField
-                    size="small"
-                    value={charge.jobCode || ""}
-                    onChange={(e) => handleAllChargesBulkEditChange(index, "jobCode", e.target.value)}
-                    fullWidth
-                  />
-                </TableCell>
-                <TableCell>
-                  <TextField
-                    size="small"
-                    value={charge.passengerName || ""}
-                    onChange={(e) => handleAllChargesBulkEditChange(index, "passengerName", e.target.value)}
-                    fullWidth
-                  />
-                </TableCell>
+                <TableCell>{charge.jobCode || "-"}</TableCell>
+                <TableCell>{charge.passengerName || "-"}</TableCell>
                 <TableCell>
                   {charge.cab ? `${charge.cab.cabNumber}` : "-"}
                 </TableCell>
                 <TableCell>
                   {charge.driver ? `${charge.driver.firstName} ${charge.driver.lastName}` : "-"}
                 </TableCell>
-                <TableCell>
-                  <TextField
-                    size="small"
-                    value={charge.pickupAddress || ""}
-                    onChange={(e) => handleAllChargesBulkEditChange(index, "pickupAddress", e.target.value)}
-                    fullWidth
-                  />
-                </TableCell>
-                <TableCell>
-                  <TextField
-                    size="small"
-                    value={charge.dropoffAddress || ""}
-                    onChange={(e) => handleAllChargesBulkEditChange(index, "dropoffAddress", e.target.value)}
-                    fullWidth
-                  />
-                </TableCell>
-                <TableCell>
-                  <TextField
-                    size="small"
-                    type="number"
-                    value={charge.fareAmount}
-                    onChange={(e) => handleAllChargesBulkEditChange(index, "fareAmount", e.target.value)}
-                    InputProps={{ startAdornment: "$" }}
-                    sx={{ width: 100 }}
-                  />
-                </TableCell>
+                <TableCell>{charge.pickupAddress || "-"}</TableCell>
+                <TableCell>{charge.dropoffAddress || "-"}</TableCell>
+                <TableCell align="right">${charge.fareAmount}</TableCell>
                 <TableCell>
                   <TextField
                     size="small"
