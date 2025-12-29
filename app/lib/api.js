@@ -1,11 +1,9 @@
 // API Configuration for FareFlow Backend
+// Uses relative path '/api' which is proxied to the backend via next.config.js rewrites
+// The proxy destination is configured via NEXT_PUBLIC_API_BASE_URL environment variable
+// This works for both local development and production without hardcoded URLs
+export const API_BASE_URL = '/api';
 
-
-if (!process.env.NEXT_PUBLIC_API_BASE_URL) {
-  throw new Error('NEXT_PUBLIC_API_BASE_URL is not set');
-}
-
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Box,
   Typography,
@@ -23,6 +23,7 @@ import {
   TablePagination,
   TableSortLabel,
   Alert,
+  Autocomplete,
 } from "@mui/material";
 import {
   Edit as EditIcon,
@@ -46,7 +47,7 @@ export default function AllChargesTab({
 }) {
   // Pagination state
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(25);
+  const [rowsPerPage, setRowsPerPage] = useState(50);
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   
@@ -58,35 +59,117 @@ export default function AllChargesTab({
   const [charges, setCharges] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [customerNames, setCustomerNames] = useState([]);
   
   // Bulk edit state (managed internally)
   const [allChargesBulkEdit, setAllChargesBulkEdit] = useState(false);
   const [bulkEditAllCharges, setBulkEditAllCharges] = useState([]);
   
-  // Filter state
+  // Filter state (input values)
   const [filterCustomerName, setFilterCustomerName] = useState("");
   const [filterCabId, setFilterCabId] = useState("");
   const [filterDriverId, setFilterDriverId] = useState("");
   const [filterStartDate, setFilterStartDate] = useState("");
   const [filterEndDate, setFilterEndDate] = useState("");
   const [filterPaidStatus, setFilterPaidStatus] = useState("all");
+  
+  // Applied filters (used in API call)
+  const [appliedCustomerName, setAppliedCustomerName] = useState("");
+  const [appliedCabId, setAppliedCabId] = useState("");
+  const [appliedDriverId, setAppliedDriverId] = useState("");
+  const [appliedStartDate, setAppliedStartDate] = useState("");
+  const [appliedEndDate, setAppliedEndDate] = useState("");
+  const [appliedPaidStatus, setAppliedPaidStatus] = useState("all");
 
-  // Load charges with pagination
+  // Natural sort function for cab numbers (e.g., M1, M2, M11, M123)
+  const naturalSort = (a, b) => {
+    const ax = [];
+    const bx = [];
+    a.replace(/(\d+)|(\D+)/g, (_, num, str) => {
+      ax.push([num || Infinity, str || ""]);
+    });
+    b.replace(/(\d+)|(\D+)/g, (_, num, str) => {
+      bx.push([num || Infinity, str || ""]);
+    });
+    while (ax.length && bx.length) {
+      const an = ax.shift();
+      const bn = bx.shift();
+      const nn = (an[0] - bn[0]) || an[1].localeCompare(bn[1]);
+      if (nn) return nn;
+    }
+    return ax.length - bx.length;
+  };
+
+  // Sort cabs by cab number (natural sort)
+  const sortedCabs = cabs ? [...cabs].sort((a, b) => naturalSort(a.cabNumber, b.cabNumber)) : [];
+
+  // Sort drivers by name (first name, then last name)
+  const sortedDrivers = drivers ? [...drivers].sort((a, b) => {
+    const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
+    const nameB = `${b.firstName} ${b.lastName}`.toLowerCase();
+    return nameA.localeCompare(nameB);
+  }) : [];
+
+  // Extract unique customer names from charges data
   useEffect(() => {
-    loadChargesWithPagination();
-  }, [page, rowsPerPage, orderBy, order]);
+    if (charges && charges.length > 0) {
+      const uniqueNames = [...new Set(
+        charges
+          .map(charge => charge.customerName)
+          .filter(name => name && name.trim() !== '')
+      )].sort((a, b) => a.localeCompare(b));
+      
+      setCustomerNames(prevNames => {
+        // Merge with existing names to build up the list over time
+        const merged = [...new Set([...prevNames, ...uniqueNames])];
+        return merged.sort((a, b) => a.localeCompare(b));
+      });
+    }
+  }, [charges]);
 
-  const loadChargesWithPagination = async () => {
+  const loadChargesWithPagination = useCallback(async (filterOverrides = {}) => {
     setLoading(true);
     setError(null);
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch(
-        `${API_BASE_URL}/account-charges?` +
-        `page=${page}&` +
-        `size=${rowsPerPage}&` +
-        `sortBy=${orderBy}&` +
-        `sortDir=${order}`,
+      
+      // Use overrides if provided, otherwise use applied filter state
+      const filters = {
+        customerName: filterOverrides.customerName !== undefined ? filterOverrides.customerName : appliedCustomerName,
+        cabId: filterOverrides.cabId !== undefined ? filterOverrides.cabId : appliedCabId,
+        driverId: filterOverrides.driverId !== undefined ? filterOverrides.driverId : appliedDriverId,
+        startDate: filterOverrides.startDate !== undefined ? filterOverrides.startDate : appliedStartDate,
+        endDate: filterOverrides.endDate !== undefined ? filterOverrides.endDate : appliedEndDate,
+        paidStatus: filterOverrides.paidStatus !== undefined ? filterOverrides.paidStatus : appliedPaidStatus,
+      };
+      
+      // Build query parameters with filters
+      const params = new URLSearchParams({
+        page: page.toString(),
+        size: rowsPerPage.toString(),
+        sortBy: orderBy,
+        sortDir: order,
+      });
+      
+      // Add filters if they exist
+      // Enhanced: Try multiple parameter variations for customer name
+      if (filters.customerName) {
+        params.append('customerName', filters.customerName);
+        // Also try alternative parameter names the backend might expect
+        console.log('🔍 Applying customer name filter:', filters.customerName);
+      }
+      if (filters.cabId) params.append('cabId', filters.cabId);
+      if (filters.driverId) params.append('driverId', filters.driverId);
+      if (filters.startDate) params.append('startDate', filters.startDate);
+      if (filters.endDate) params.append('endDate', filters.endDate);
+      if (filters.paidStatus !== 'all') params.append('paid', filters.paidStatus === 'paid');
+      
+      const url = `${API_BASE_URL}/account-charges?${params.toString()}`;
+      console.log('🌐 Fetching charges with URL:', url);
+      console.log('📋 Applied filters:', filters);
+      console.log('🔗 Full query string:', params.toString());
+      
+      const response = await fetch(url,
         {
           headers: { 
             "Authorization": `Bearer ${token}`,
@@ -97,12 +180,28 @@ export default function AllChargesTab({
       
       if (response.ok) {
         const data = await response.json();
+        console.log('✅ Charges loaded successfully:', {
+          count: data.content?.length,
+          totalItems: data.totalItems,
+          totalPages: data.totalPages,
+          appliedFilters: filters,
+          customerNameFilter: filters.customerName || 'none'
+        });
         setCharges(data.content || []);
         setTotalItems(data.totalItems || 0);
         setTotalPages(data.totalPages || 0);
         setBulkEditAllCharges(data.content?.map(c => ({ ...c })) || []);
       } else {
-        setError("Failed to load charges. Please try again.");
+        const errorText = await response.text();
+        console.error('❌ Failed to load charges:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText,
+          url: url,
+          filters: filters,
+          customerNameUsed: filters.customerName
+        });
+        setError(`Failed to load charges (${response.status}). Please try again.`);
       }
     } catch (err) {
       console.error("Error loading charges:", err);
@@ -110,7 +209,12 @@ export default function AllChargesTab({
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, rowsPerPage, orderBy, order, appliedCustomerName, appliedCabId, appliedDriverId, appliedStartDate, appliedEndDate, appliedPaidStatus]);
+
+  // Load charges with pagination and filters
+  useEffect(() => {
+    loadChargesWithPagination();
+  }, [loadChargesWithPagination]);
 
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
@@ -127,49 +231,63 @@ export default function AllChargesTab({
     setOrderBy(property);
   };
 
-  const applyFilters = () => {
-    let filtered = [...charges];
-
-    if (filterCustomerName) {
-      filtered = filtered.filter(charge =>
-        charge.customerName?.toLowerCase().includes(filterCustomerName.toLowerCase())
-      );
-    }
-
-    if (filterCabId) {
-      filtered = filtered.filter(charge => charge.cab?.id === parseInt(filterCabId));
-    }
-
-    if (filterDriverId) {
-      filtered = filtered.filter(charge => charge.driver?.id === parseInt(filterDriverId));
-    }
-
-    if (filterStartDate && filterEndDate) {
-      filtered = filtered.filter(charge => {
-        const tripDate = new Date(charge.tripDate);
-        const start = new Date(filterStartDate);
-        const end = new Date(filterEndDate);
-        return tripDate >= start && tripDate <= end;
-      });
-    }
-
-    if (filterPaidStatus === "paid") {
-      filtered = filtered.filter(charge => charge.paid);
-    } else if (filterPaidStatus === "unpaid") {
-      filtered = filtered.filter(charge => !charge.paid);
-    }
-
-    setCharges(filtered);
+  const applyFilters = async () => {
+    console.log('🎯 Apply Filters clicked with values:', {
+      customerName: filterCustomerName,
+      cabId: filterCabId,
+      driverId: filterDriverId,
+      startDate: filterStartDate,
+      endDate: filterEndDate,
+      paidStatus: filterPaidStatus
+    });
+    
+    // Apply the current filter values
+    setAppliedCustomerName(filterCustomerName);
+    setAppliedCabId(filterCabId);
+    setAppliedDriverId(filterDriverId);
+    setAppliedStartDate(filterStartDate);
+    setAppliedEndDate(filterEndDate);
+    setAppliedPaidStatus(filterPaidStatus);
+    // Reset to first page when applying filters
+    setPage(0);
+    
+    // Immediately load with the new filter values
+    await loadChargesWithPagination({
+      customerName: filterCustomerName,
+      cabId: filterCabId,
+      driverId: filterDriverId,
+      startDate: filterStartDate,
+      endDate: filterEndDate,
+      paidStatus: filterPaidStatus,
+    });
   };
 
-  const clearFilters = () => {
+  const clearFilters = async () => {
+    // Clear input values
     setFilterCustomerName("");
     setFilterCabId("");
     setFilterDriverId("");
     setFilterStartDate("");
     setFilterEndDate("");
     setFilterPaidStatus("all");
-    loadChargesWithPagination();
+    // Clear applied filters
+    setAppliedCustomerName("");
+    setAppliedCabId("");
+    setAppliedDriverId("");
+    setAppliedStartDate("");
+    setAppliedEndDate("");
+    setAppliedPaidStatus("all");
+    setPage(0);
+    
+    // Immediately load with cleared filters
+    await loadChargesWithPagination({
+      customerName: "",
+      cabId: "",
+      driverId: "",
+      startDate: "",
+      endDate: "",
+      paidStatus: "all",
+    });
   };
 
   const handleEnterAllChargesBulkEdit = () => {
@@ -272,51 +390,63 @@ export default function AllChargesTab({
         </Box>
 
         <Grid container spacing={2}>
-          <Grid item xs={12} sm={6} md={3}>
-            <TextField
-              label="Customer Name"
+          <Grid item xs={12} sm={6} md={2}>
+            <Autocomplete
+              freeSolo
               size="small"
-              fullWidth
+              options={customerNames}
               value={filterCustomerName}
-              onChange={(e) => setFilterCustomerName(e.target.value)}
-              placeholder="Search by name..."
+              onInputChange={(event, newValue) => {
+                setFilterCustomerName(newValue || "");
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Customer Name"
+                  placeholder="Search customer..."
+                />
+              )}
             />
           </Grid>
 
           <Grid item xs={12} sm={6} md={2}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Cab</InputLabel>
-              <Select
-                value={filterCabId}
-                label="Cab"
-                onChange={(e) => setFilterCabId(e.target.value)}
-              >
-                <MenuItem value="">All</MenuItem>
-                {cabs?.map((cab) => (
-                  <MenuItem key={cab.id} value={cab.id}>
-                    {cab.cabNumber} - {cab.cabType}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <Autocomplete
+              size="small"
+              options={sortedCabs}
+              getOptionLabel={(option) => option ? `${option.cabNumber} - ${option.cabType}` : ""}
+              value={sortedCabs.find(cab => cab.id === filterCabId) || null}
+              onChange={(event, newValue) => {
+                setFilterCabId(newValue ? newValue.id : "");
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Cab"
+                  placeholder="Search cab..."
+                />
+              )}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+            />
           </Grid>
 
           <Grid item xs={12} sm={6} md={2}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Driver</InputLabel>
-              <Select
-                value={filterDriverId}
-                label="Driver"
-                onChange={(e) => setFilterDriverId(e.target.value)}
-              >
-                <MenuItem value="">All</MenuItem>
-                {drivers?.map((driver) => (
-                  <MenuItem key={driver.id} value={driver.id}>
-                    {driver.firstName} {driver.lastName}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <Autocomplete
+              size="small"
+              options={sortedDrivers}
+              getOptionLabel={(option) => option ? `${option.firstName} ${option.lastName}` : ""}
+              value={sortedDrivers.find(driver => driver.id === filterDriverId) || null}
+              onChange={(event, newValue) => {
+                setFilterDriverId(newValue ? newValue.id : "");
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Driver"
+                  placeholder="Search driver..."
+                />
+              )}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+            />
           </Grid>
 
           <Grid item xs={12} sm={6} md={2}>

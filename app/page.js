@@ -928,7 +928,7 @@ function MarketingLandingPage({ router }) {
             {[
               { label: "Time Saved", value: "95%", icon: Schedule, description: "Automated processing" },
               { label: "Accuracy", value: "99.9%", icon: CheckCircle, description: "Error-free calculations" },
-              { label: "Cost Reduction", value: "40%", icon: AttachMoney, description: "Lower admin costs" },
+              { label: "Cost Reduction", value: "60%", icon: AttachMoney, description: "Lower admin costs" },
               { label: "Real-time Updates", value: "< 1s", icon: Speed, description: "Instant sync" }
             ].map((stat, index) => (
               <Grid item xs={12} sm={6} md={3} key={index}>

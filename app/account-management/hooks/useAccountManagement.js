@@ -237,20 +237,48 @@ export function useAccountManagement() {
 
   const loadInvoices = useCallback(async () => {
     try {
+      console.log('📄 Loading invoices from:', `${API_BASE_URL}/invoices`);
+       console.log(localStorage.getItem("token"))
       const response = await fetch(`${API_BASE_URL}/invoices`, {
+       
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
       });
+      console.log('📄 Invoices response status:', response.status);
+      
       if (response.ok) {
         const data = await response.json();
+        console.log('📄 Invoices raw data:', data);
         
         // Handle both array response and paginated response
         const invoicesArray = Array.isArray(data) ? data : (data.content || data.data || []);
+        console.log('📄 Invoices array:', invoicesArray, 'Length:', invoicesArray.length);
         
         setInvoices(invoicesArray);
         setFilteredInvoices(invoicesArray);
+        setError(""); // Clear any previous errors
+      } else if (response.status === 403) {
+        console.error('📄 Access forbidden to invoices endpoint');
+        setError("You don't have permission to view invoices. Please contact your administrator.");
+        setInvoices([]);
+        setFilteredInvoices([]);
+      } else {
+        const errorText = await response.text();
+        console.error('📄 Failed to load invoices:', response.status, errorText);
+        if (errorText.includes('HttpMessageNotWritableException') || errorText.includes('could not initialize proxy')) {
+          setError("Backend error: Invoice data cannot be serialized. Please contact the backend team to fix the Hibernate lazy loading issue.");
+        } else {
+          setError(`Failed to load invoices (${response.status})`);
+        }
+        setInvoices([]);
+        setFilteredInvoices([]);
       }
     } catch (err) {
       console.error("Error loading invoices:", err);
+      if (err.message?.includes('JSON')) {
+        setError("Backend returned invalid JSON. The backend needs to fix the Hibernate session issue.");
+      } else {
+        setError("Failed to connect to server");
+      }
     }
   }, []);
 

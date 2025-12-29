@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Box,
   Typography,
@@ -49,6 +50,21 @@ export default function TripChargesTab({
   handleSaveBulkEdit,
   handleFilterCharges,
 }) {
+  const [customerSearch, setCustomerSearch] = useState("");
+
+  // Filter customers based on search term
+  const filteredCustomers = customers
+    .filter(c => c.active)
+    .filter(customer => {
+      if (!customerSearch) return true;
+      const searchLower = customerSearch.toLowerCase();
+      return (
+        customer.companyName?.toLowerCase().includes(searchLower) ||
+        customer.city?.toLowerCase().includes(searchLower) ||
+        customer.province?.toLowerCase().includes(searchLower)
+      );
+    });
+
   return (
     <Box sx={{ p: 3 }}>
       <Grid container spacing={3}>
@@ -57,10 +73,24 @@ export default function TripChargesTab({
           <Typography variant="h6" gutterBottom>
             Select Customer
           </Typography>
+          
+          {/* Customer Search Field */}
+          <TextField
+            fullWidth
+            size="small"
+            placeholder="Search customers..."
+            value={customerSearch}
+            onChange={(e) => setCustomerSearch(e.target.value)}
+            InputProps={{
+              startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+            }}
+            sx={{ mb: 2 }}
+          />
+          
           <Paper variant="outlined" sx={{ maxHeight: 600, overflow: "auto" }}>
             <Table size="small">
               <TableBody>
-                {customers.filter(c => c.active).map((customer) => (
+                {filteredCustomers.map((customer) => (
                   <TableRow
                     key={customer.id}
                     hover

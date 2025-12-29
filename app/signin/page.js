@@ -13,7 +13,7 @@ import {
   InputAdornment,
   IconButton
 } from "@mui/material";
-import { Visibility, VisibilityOff, Person, Lock } from "@mui/icons-material";
+import { Visibility, VisibilityOff, Person, Lock, Home } from "@mui/icons-material";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { useRouter } from "next/navigation";
 import { API_BASE_URL } from '../lib/api';
@@ -251,6 +251,29 @@ export default function SignInPage() {
                 }}
               >
                 {loading ? "Signing in..." : "Sign In"}
+              </Button>
+
+              {/* Back to Home Button */}
+              <Button
+                fullWidth
+                variant="outlined"
+                startIcon={<Home />}
+                onClick={() => router.push('/')}
+                disabled={loading}
+                sx={{
+                  mb: 2,
+                  padding: "10px",
+                  borderColor: "#667eea",
+                  color: "#667eea",
+                  fontWeight: "600",
+                  borderRadius: 2,
+                  "&:hover": { 
+                    borderColor: "#5568d3",
+                    backgroundColor: "rgba(102, 126, 234, 0.05)"
+                  },
+                }}
+              >
+                Back to Home
               </Button>
 
               {/* Test Account Info */}

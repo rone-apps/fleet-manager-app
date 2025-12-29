@@ -48,6 +48,10 @@ export default function InvoicesTab({
   handleCancelInvoice,
   handleOpenRecordPaymentDialog,
 }) {
+  console.log('🧾 InvoicesTab rendered with filteredInvoices:', filteredInvoices);
+  console.log('🧾 filteredInvoices length:', filteredInvoices?.length);
+  console.log('🧾 filteredInvoices type:', Array.isArray(filteredInvoices) ? 'array' : typeof filteredInvoices);
+  
   return (
     <Box sx={{ p: 3 }}>
       {/* Filter Panel */}
@@ -171,7 +175,7 @@ export default function InvoicesTab({
                       {invoice.invoiceNumber}
                     </Typography>
                   </TableCell>
-                  <TableCell>{invoice.customer.companyName}</TableCell>
+                  <TableCell>{invoice.customer?.companyName || 'N/A'}</TableCell>
                   <TableCell>{formatDate(invoice.invoiceDate)}</TableCell>
                   <TableCell>
                     <Box>
