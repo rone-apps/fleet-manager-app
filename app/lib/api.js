@@ -110,7 +110,7 @@ export function isAuthenticated() {
 }
 
 /**
- * Logout user
+ * Logout user - redirects to homepage (landing page)
  */
 export function logout() {
   if (typeof window !== 'undefined') {
@@ -118,7 +118,8 @@ export function logout() {
     sessionStorage.clear();
     // Clear the token cookie
     document.cookie = 'token=; path=/; max-age=0; SameSite=Strict';
-    window.location.replace('/signin');
+    // Redirect to homepage instead of signin - user will see the landing page
+    window.location.replace('/');
   }
 }
 

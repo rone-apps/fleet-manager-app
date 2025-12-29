@@ -20,8 +20,8 @@ import { API_BASE_URL } from '../lib/api';
 
 const theme = createTheme({
   palette: {
-    primary: { main: "#3e5244" },
-    secondary: { main: "#525f7f" },
+    primary: { main: "#667eea" },
+    secondary: { main: "#764ba2" },
     background: { default: "#f6f9fc" },
   },
   typography: {
@@ -105,32 +105,36 @@ export default function SignInPage() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: "#f6f9fc",
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
           padding: 2,
         }}
       >
         <Container component="main" maxWidth="xs">
           <Paper
-            elevation={3}
+            elevation={8}
             sx={{
               padding: 4,
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              borderRadius: 2,
+              borderRadius: 3,
+              backdropFilter: 'blur(10px)',
+              backgroundColor: 'rgba(255, 255, 255, 0.95)',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
             }}
           >
             {/* Logo/Title */}
             <Box
               sx={{
-                width: 60,
-                height: 60,
+                width: 70,
+                height: 70,
                 borderRadius: "50%",
-                backgroundColor: "#3e5244",
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 mb: 2,
+                boxShadow: '0 8px 16px rgba(102, 126, 234, 0.4)'
               }}
             >
               <Typography variant="h4" sx={{ color: "white", fontWeight: "bold" }}>
@@ -141,7 +145,15 @@ export default function SignInPage() {
             <Typography
               component="h1"
               variant="h4"
-              sx={{ color: "#3e5244", fontWeight: "bold", mb: 1 }}
+              sx={{ 
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                backgroundClip: 'text',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                fontWeight: "900", 
+                mb: 1,
+                letterSpacing: '-1px'
+              }}
             >
               FareFlow
             </Typography>
@@ -149,7 +161,7 @@ export default function SignInPage() {
             <Typography
               component="h2"
               variant="h6"
-              sx={{ color: "#525f7f", mb: 3, textAlign: "center" }}
+              sx={{ color: "#666", mb: 3, textAlign: "center", fontWeight: 500 }}
             >
               Sign in to your account
             </Typography>
@@ -178,7 +190,7 @@ export default function SignInPage() {
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
-                      <Person sx={{ color: "#3e5244" }} />
+                      <Person sx={{ color: "#667eea" }} />
                     </InputAdornment>
                   ),
                 }}
@@ -200,7 +212,7 @@ export default function SignInPage() {
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
-                      <Lock sx={{ color: "#3e5244" }} />
+                      <Lock sx={{ color: "#667eea" }} />
                     </InputAdornment>
                   ),
                   endAdornment: (
@@ -226,10 +238,15 @@ export default function SignInPage() {
                   mt: 3,
                   mb: 2,
                   padding: "12px",
-                  backgroundColor: "#3e5244",
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                   fontWeight: "bold",
                   fontSize: "16px",
-                  "&:hover": { backgroundColor: "#2d3d32" },
+                  borderRadius: 2,
+                  boxShadow: '0 4px 14px rgba(102, 126, 234, 0.4)',
+                  "&:hover": { 
+                    background: 'linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%)',
+                    boxShadow: '0 6px 20px rgba(102, 126, 234, 0.6)'
+                  },
                   "&:disabled": { backgroundColor: "#ccc" },
                 }}
               >

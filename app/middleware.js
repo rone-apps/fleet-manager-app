@@ -17,7 +17,7 @@ export function middleware(request) {
   const path = request.nextUrl.pathname;
 
   // Public paths that don't require authentication
-  const publicPaths = ['/signin'];
+  const publicPaths = ['/signin', '/'];
   const isPublicPath = publicPaths.includes(path);
 
   // Get token from localStorage (via cookies for middleware)
@@ -41,8 +41,8 @@ export function middleware(request) {
     }
   }
 
-  // If logged in and trying to access auth pages
-  if (isPublicPath && token && !isTokenExpired(token)) {
+  // If logged in and trying to access signin page, redirect to home
+  if (path === '/signin' && token && !isTokenExpired(token)) {
     return NextResponse.redirect(new URL('/', request.url));
   }
 
