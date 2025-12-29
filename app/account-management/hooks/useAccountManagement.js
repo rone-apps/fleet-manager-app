@@ -192,8 +192,13 @@ export function useAccountManagement() {
     try {
       let url = `${API_BASE_URL}/account-charges/customer/${customerId}`;
       
+      console.log('📅 Trip Charges Date Filter:', { startDate, endDate, hasDateFilter: !!(startDate && endDate) });
+      
       if (startDate && endDate) {
         url = `${API_BASE_URL}/account-charges/customer/${customerId}/between?startDate=${startDate}&endDate=${endDate}`;
+        console.log('📅 Using date-filtered URL:', url);
+      } else {
+        console.log('📅 Using unfiltered URL:', url);
       }
 
       const response = await fetch(url, {
@@ -583,10 +588,15 @@ export function useAccountManagement() {
   }, [bulkEditCharges, selectedCustomer, loadChargesForCustomer]);
 
   const handleFilterCharges = useCallback(() => {
+    console.log('🔍 Filter button clicked for Trip Charges');
+    console.log('📅 Current date values:', { startDate, endDate });
     if (selectedCustomer) {
+      console.log('👤 Reloading charges for customer:', selectedCustomer.companyName);
       loadChargesForCustomer(selectedCustomer.id);
+    } else {
+      console.log('⚠️ No customer selected');
     }
-  }, [selectedCustomer, loadChargesForCustomer]);
+  }, [selectedCustomer, startDate, endDate, loadChargesForCustomer]);
 
   // ==================== All Charges Operations (Tab 3) ====================
 
