@@ -62,7 +62,7 @@ fareflow-app/
    ```
 3. Configure your API URL in `.env.local`:
    ```
-   NEXT_PUBLIC_API_URL=http://localhost:8080/api
+  
    ```
 4. Run your development server:
    ```bash
