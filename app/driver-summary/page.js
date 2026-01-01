@@ -59,23 +59,11 @@ export default function DriverSummaryPage() {
   const [reportData, setReportData] = useState(null);
   const [filteredData, setFilteredData] = useState([]);
   
-  // Cumulative totals tracking (running sum as we paginate)
-  const [cumulativeTotals, setCumulativeTotals] = useState({
-    revenue: 0,
-    expense: 0,
-    netOwed: 0,
-    driverCount: 0,
-    // Revenue breakdown
-    leaseRevenue: 0,
-    creditCardRevenue: 0,
-    chargesRevenue: 0,
-    otherRevenue: 0,
-    // Expense breakdown
-    fixedExpense: 0,
-    leaseExpense: 0,
-    variableExpense: 0,
-    otherExpense: 0
-  });
+  // ✅ NEW: Track which pages we've loaded to calculate cumulative correctly
+  const [loadedPages, setLoadedPages] = useState(new Map());
+  
+  // ✅ NEW: Store grand totals from backend (available on last page)
+  const [grandTotals, setGrandTotals] = useState(null);
 
   const getCurrentUser = async () => {
     try {
@@ -126,9 +114,74 @@ export default function DriverSummaryPage() {
     setOrder(newOrder);
     setOrderBy(property);
     
-    // Need to use the NEW values, not the old state
-    // So we'll manually pass them to a modified fetchReport
+    // Reset loaded pages when sorting changes
+    setLoadedPages(new Map());
+    setGrandTotals(null);
+    
+    // Fetch from page 0 with new sort
     fetchReportWithSort(0, property, newOrder);
+  };
+
+  // ✅ NEW: Calculate cumulative totals from all loaded pages
+  const calculateCumulativeTotals = (currentPageData, pageNumber) => {
+    // Update loaded pages map with current page data
+    const newLoadedPages = new Map(loadedPages);
+    newLoadedPages.set(pageNumber, {
+      revenue: currentPageData.pageTotalRevenue || 0,
+      expense: currentPageData.pageTotalExpense || 0,
+      netOwed: currentPageData.pageNetOwed || 0,
+      driverCount: currentPageData.driverSummaries.length,
+      leaseRevenue: currentPageData.pageLeaseRevenue || 0,
+      creditCardRevenue: currentPageData.pageCreditCardRevenue || 0,
+      chargesRevenue: currentPageData.pageChargesRevenue || 0,
+      otherRevenue: currentPageData.pageOtherRevenue || 0,
+      fixedExpense: currentPageData.pageFixedExpense || 0,
+      leaseExpense: currentPageData.pageLeaseExpense || 0,
+      variableExpense: currentPageData.pageVariableExpense || 0,
+      otherExpense: currentPageData.pageOtherExpense || 0
+    });
+    
+    setLoadedPages(newLoadedPages);
+    
+    // Sum up all loaded pages (no duplicates because Map keys are unique)
+    let cumulative = {
+      revenue: 0,
+      expense: 0,
+      netOwed: 0,
+      driverCount: 0,
+      leaseRevenue: 0,
+      creditCardRevenue: 0,
+      chargesRevenue: 0,
+      otherRevenue: 0,
+      fixedExpense: 0,
+      leaseExpense: 0,
+      variableExpense: 0,
+      otherExpense: 0
+    };
+    
+    // Get array of page numbers and sort them
+    const pageNumbers = Array.from(newLoadedPages.keys()).sort((a, b) => a - b);
+    
+    // Sum only consecutive pages from 0 to current
+    for (let i = 0; i <= pageNumber; i++) {
+      if (newLoadedPages.has(i)) {
+        const pageData = newLoadedPages.get(i);
+        cumulative.revenue += pageData.revenue;
+        cumulative.expense += pageData.expense;
+        cumulative.netOwed += pageData.netOwed;
+        cumulative.driverCount += pageData.driverCount;
+        cumulative.leaseRevenue += pageData.leaseRevenue;
+        cumulative.creditCardRevenue += pageData.creditCardRevenue;
+        cumulative.chargesRevenue += pageData.chargesRevenue;
+        cumulative.otherRevenue += pageData.otherRevenue;
+        cumulative.fixedExpense += pageData.fixedExpense;
+        cumulative.leaseExpense += pageData.leaseExpense;
+        cumulative.variableExpense += pageData.variableExpense;
+        cumulative.otherExpense += pageData.otherExpense;
+      }
+    }
+    
+    return cumulative;
   };
 
   // Modified fetch that accepts sort parameters directly
@@ -208,6 +261,7 @@ export default function DriverSummaryPage() {
       console.log('   Start Date from backend:', response.data.startDate);
       console.log('   End Date from backend:', response.data.endDate);
       console.log('   Drivers on this page:', response.data.driverSummaries.length);
+      console.log('   Page:', response.data.currentPage, 'of', response.data.totalPages);
 
       setReportData(response.data);
       setFilteredData(response.data.driverSummaries);
@@ -215,29 +269,9 @@ export default function DriverSummaryPage() {
       setTotalPages(response.data.totalPages);
       setTotalElements(response.data.totalElements);
       
-      // Calculate cumulative totals incrementally
-      // If going forward (next page), add current page to running total
-      // If going to page 0, reset totals
-      // If on last page, use grand totals from backend
-      if (pageNum === 0) {
-        // Reset to first page totals
-        setCumulativeTotals({
-          revenue: response.data.pageTotalRevenue || 0,
-          expense: response.data.pageTotalExpense || 0,
-          netOwed: response.data.pageNetOwed || 0,
-          driverCount: response.data.driverSummaries.length,
-          leaseRevenue: response.data.pageLeaseRevenue || 0,
-          creditCardRevenue: response.data.pageCreditCardRevenue || 0,
-          chargesRevenue: response.data.pageChargesRevenue || 0,
-          otherRevenue: response.data.pageOtherRevenue || 0,
-          fixedExpense: response.data.pageFixedExpense || 0,
-          leaseExpense: response.data.pageLeaseExpense || 0,
-          variableExpense: response.data.pageVariableExpense || 0,
-          otherExpense: response.data.pageOtherExpense || 0
-        });
-      } else if (response.data.currentPage + 1 === response.data.totalPages) {
-        // Last page - use grand totals from backend
-        setCumulativeTotals({
+      // ✅ Store grand totals if on last page
+      if (response.data.currentPage + 1 === response.data.totalPages && response.data.grandTotalRevenue !== undefined) {
+        setGrandTotals({
           revenue: response.data.grandTotalRevenue || 0,
           expense: response.data.grandTotalExpense || 0,
           netOwed: response.data.grandNetOwed || 0,
@@ -251,23 +285,10 @@ export default function DriverSummaryPage() {
           variableExpense: response.data.grandTotalVariableExpense || 0,
           otherExpense: response.data.grandTotalOtherExpense || 0
         });
-      } else {
-        // Middle pages - add to cumulative
-        setCumulativeTotals(prev => ({
-          revenue: prev.revenue + (response.data.pageTotalRevenue || 0),
-          expense: prev.expense + (response.data.pageTotalExpense || 0),
-          netOwed: prev.netOwed + (response.data.pageNetOwed || 0),
-          driverCount: prev.driverCount + response.data.driverSummaries.length,
-          leaseRevenue: prev.leaseRevenue + (response.data.pageLeaseRevenue || 0),
-          creditCardRevenue: prev.creditCardRevenue + (response.data.pageCreditCardRevenue || 0),
-          chargesRevenue: prev.chargesRevenue + (response.data.pageChargesRevenue || 0),
-          otherRevenue: prev.otherRevenue + (response.data.pageOtherRevenue || 0),
-          fixedExpense: prev.fixedExpense + (response.data.pageFixedExpense || 0),
-          leaseExpense: prev.leaseExpense + (response.data.pageLeaseExpense || 0),
-          variableExpense: prev.variableExpense + (response.data.pageVariableExpense || 0),
-          otherExpense: prev.otherExpense + (response.data.pageOtherExpense || 0)
-        }));
       }
+      
+      // ✅ Calculate cumulative totals from loaded pages (no double counting)
+      calculateCumulativeTotals(response.data, pageNum);
       
       setLoadingMessage("");
     } catch (err) {
@@ -285,7 +306,6 @@ export default function DriverSummaryPage() {
         setError("Access denied. You don't have permission to view this report. Please check with your administrator or try signing in again.");
       } else if (err.response?.status === 401) {
         setError("Session expired. Please sign in again.");
-        // Optionally redirect to login
         setTimeout(() => {
           router.push("/signin");
         }, 2000);
@@ -318,6 +338,52 @@ export default function DriverSummaryPage() {
 
     setFilteredData(filtered);
   }, [searchDriverNumber, searchDriverName, reportData]);
+
+  // ✅ Get display totals (use grand totals if available, otherwise cumulative)
+  const getDisplayTotals = () => {
+    if (grandTotals) {
+      return grandTotals;
+    }
+    
+    // Calculate from loaded pages
+    let totals = {
+      revenue: 0,
+      expense: 0,
+      netOwed: 0,
+      driverCount: 0,
+      leaseRevenue: 0,
+      creditCardRevenue: 0,
+      chargesRevenue: 0,
+      otherRevenue: 0,
+      fixedExpense: 0,
+      leaseExpense: 0,
+      variableExpense: 0,
+      otherExpense: 0
+    };
+    
+    // Sum only consecutive pages from 0 to current page
+    for (let i = 0; i <= page; i++) {
+      if (loadedPages.has(i)) {
+        const pageData = loadedPages.get(i);
+        totals.revenue += pageData.revenue;
+        totals.expense += pageData.expense;
+        totals.netOwed += pageData.netOwed;
+        totals.driverCount += pageData.driverCount;
+        totals.leaseRevenue += pageData.leaseRevenue;
+        totals.creditCardRevenue += pageData.creditCardRevenue;
+        totals.chargesRevenue += pageData.chargesRevenue;
+        totals.otherRevenue += pageData.otherRevenue;
+        totals.fixedExpense += pageData.fixedExpense;
+        totals.leaseExpense += pageData.leaseExpense;
+        totals.variableExpense += pageData.variableExpense;
+        totals.otherExpense += pageData.otherExpense;
+      }
+    }
+    
+    return totals;
+  };
+  
+  const displayTotals = getDisplayTotals();
 
   // Format currency
   const formatCurrency = (value) => {
@@ -423,7 +489,12 @@ export default function DriverSummaryPage() {
                 <Grid item xs={12} sm={4}>
                   <Button
                     variant="contained"
-                    onClick={() => fetchReport(0)}
+                    onClick={() => {
+                      // Reset tracking when generating new report
+                      setLoadedPages(new Map());
+                      setGrandTotals(null);
+                      fetchReport(0);
+                    }}
                     disabled={loading}
                     fullWidth
                     size="large"
@@ -489,12 +560,12 @@ export default function DriverSummaryPage() {
                   <Grid item xs={12} sm={6} md={3}>
                     <Paper sx={{ p: 2, textAlign: "center" }}>
                       <Typography variant="subtitle2" color="text.secondary">
-                        {page + 1 === totalPages 
-                          ? "Total Active Drivers"
-                          : "Drivers So Far"}
+                        {grandTotals 
+                          ? "Total Drivers with Activity"
+                          : "Drivers Loaded So Far"}
                       </Typography>
                       <Typography variant="h5" fontWeight="bold">
-                        {cumulativeTotals.driverCount} / {totalElements}
+                        {displayTotals.driverCount} {totalElements > 0 ? `/ ${totalElements}` : ''}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
                         Page {page + 1} of {totalPages} ({reportData.driverSummaries.length} on this page)
@@ -504,49 +575,49 @@ export default function DriverSummaryPage() {
                   <Grid item xs={12} sm={6} md={3}>
                     <Paper sx={{ p: 2, textAlign: "center" }}>
                       <Typography variant="subtitle2" color="text.secondary">
-                        {page + 1 === totalPages 
+                        {grandTotals 
                           ? "Grand Total Revenue"
-                          : "Cumulative Revenue"}
+                          : "Revenue (Pages 1-" + (page + 1) + ")"}
                       </Typography>
                       <Typography variant="h5" fontWeight="bold" color="success.main">
-                        {formatCurrency(cumulativeTotals.revenue)}
+                        {formatCurrency(displayTotals.revenue)}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {page + 1 === totalPages 
+                        {grandTotals 
                           ? "✓ All drivers"
-                          : `Pages 1-${page + 1}`}
+                          : `Loaded ${loadedPages.size} page(s)`}
                       </Typography>
                     </Paper>
                   </Grid>
                   <Grid item xs={12} sm={6} md={3}>
                     <Paper sx={{ p: 2, textAlign: "center" }}>
                       <Typography variant="subtitle2" color="text.secondary">
-                        {page + 1 === totalPages 
+                        {grandTotals 
                           ? "Grand Total Expense"
-                          : "Cumulative Expense"}
+                          : "Expense (Pages 1-" + (page + 1) + ")"}
                       </Typography>
                       <Typography variant="h5" fontWeight="bold" color="error.main">
-                        {formatCurrency(cumulativeTotals.expense)}
+                        {formatCurrency(displayTotals.expense)}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {page + 1 === totalPages 
+                        {grandTotals 
                           ? "✓ All drivers"
-                          : `Pages 1-${page + 1}`}
+                          : `Loaded ${loadedPages.size} page(s)`}
                       </Typography>
                     </Paper>
                   </Grid>
                   <Grid item xs={12} sm={6} md={3}>
                     <Paper sx={{ p: 2, textAlign: "center" }}>
                       <Typography variant="subtitle2" color="text.secondary">
-                        {page + 1 === totalPages 
+                        {grandTotals 
                           ? "Grand Net Owed"
-                          : "Cumulative Net Owed"}
+                          : "Net Owed (Pages 1-" + (page + 1) + ")"}
                       </Typography>
                       <Typography variant="h5" fontWeight="bold" color="primary.main">
-                        {formatCurrency(cumulativeTotals.netOwed)}
+                        {formatCurrency(displayTotals.netOwed)}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {page + 1 === totalPages 
+                        {grandTotals 
                           ? "✓ Final totals"
                           : `Running total`}
                       </Typography>
@@ -557,7 +628,7 @@ export default function DriverSummaryPage() {
                 {/* Detailed Revenue Breakdown */}
                 <Paper sx={{ p: 2, mb: 3 }}>
                   <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
-                    Revenue Breakdown {page + 1 === totalPages ? "(Grand Total)" : "(Cumulative)"}
+                    Revenue Breakdown {grandTotals ? "(Grand Total)" : "(Loaded Pages)"}
                   </Typography>
                   <Grid container spacing={2}>
                     <Grid item xs={6} sm={3}>
@@ -566,7 +637,7 @@ export default function DriverSummaryPage() {
                           Lease Revenue
                         </Typography>
                         <Typography variant="h6" fontWeight="bold" color="success.main">
-                          {formatCurrency(cumulativeTotals.leaseRevenue)}
+                          {formatCurrency(displayTotals.leaseRevenue)}
                         </Typography>
                       </Box>
                     </Grid>
@@ -576,7 +647,7 @@ export default function DriverSummaryPage() {
                           Credit Card
                         </Typography>
                         <Typography variant="h6" fontWeight="bold" color="success.main">
-                          {formatCurrency(cumulativeTotals.creditCardRevenue)}
+                          {formatCurrency(displayTotals.creditCardRevenue)}
                         </Typography>
                       </Box>
                     </Grid>
@@ -586,7 +657,7 @@ export default function DriverSummaryPage() {
                           Charges
                         </Typography>
                         <Typography variant="h6" fontWeight="bold" color="success.main">
-                          {formatCurrency(cumulativeTotals.chargesRevenue)}
+                          {formatCurrency(displayTotals.chargesRevenue)}
                         </Typography>
                       </Box>
                     </Grid>
@@ -596,7 +667,7 @@ export default function DriverSummaryPage() {
                           Other Revenue
                         </Typography>
                         <Typography variant="h6" fontWeight="bold" color="success.main">
-                          {formatCurrency(cumulativeTotals.otherRevenue)}
+                          {formatCurrency(displayTotals.otherRevenue)}
                         </Typography>
                       </Box>
                     </Grid>
@@ -606,7 +677,7 @@ export default function DriverSummaryPage() {
                 {/* Detailed Expense Breakdown */}
                 <Paper sx={{ p: 2, mb: 3 }}>
                   <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
-                    Expense Breakdown {page + 1 === totalPages ? "(Grand Total)" : "(Cumulative)"}
+                    Expense Breakdown {grandTotals ? "(Grand Total)" : "(Loaded Pages)"}
                   </Typography>
                   <Grid container spacing={2}>
                     <Grid item xs={6} sm={3}>
@@ -615,7 +686,7 @@ export default function DriverSummaryPage() {
                           Fixed Expense
                         </Typography>
                         <Typography variant="h6" fontWeight="bold" color="error.main">
-                          {formatCurrency(cumulativeTotals.fixedExpense)}
+                          {formatCurrency(displayTotals.fixedExpense)}
                         </Typography>
                       </Box>
                     </Grid>
@@ -625,7 +696,7 @@ export default function DriverSummaryPage() {
                           Lease Expense
                         </Typography>
                         <Typography variant="h6" fontWeight="bold" color="error.main">
-                          {formatCurrency(cumulativeTotals.leaseExpense)}
+                          {formatCurrency(displayTotals.leaseExpense)}
                         </Typography>
                       </Box>
                     </Grid>
@@ -635,7 +706,7 @@ export default function DriverSummaryPage() {
                           Variable Expense
                         </Typography>
                         <Typography variant="h6" fontWeight="bold" color="error.main">
-                          {formatCurrency(cumulativeTotals.variableExpense)}
+                          {formatCurrency(displayTotals.variableExpense)}
                         </Typography>
                       </Box>
                     </Grid>
@@ -645,17 +716,16 @@ export default function DriverSummaryPage() {
                           Other Expense
                         </Typography>
                         <Typography variant="h6" fontWeight="bold" color="error.main">
-                          {formatCurrency(cumulativeTotals.otherExpense)}
+                          {formatCurrency(displayTotals.otherExpense)}
                         </Typography>
                       </Box>
                     </Grid>
                   </Grid>
                 </Paper>
 
-                {/* Driver Summary Table - continues with same table structure as before */}
+                {/* Driver Summary Table - same as before, keeping existing table implementation */}
                 <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
                   <Table size="small" sx={{ minWidth: 1400 }}>
-                    {/* Table head and body same as original */}
                     <TableHead>
                       <TableRow sx={{ bgcolor: "grey.100" }}>
                         <TableCell sx={{ minWidth: 70 }}>
@@ -817,13 +887,13 @@ export default function DriverSummaryPage() {
                           </TableCell>
                         </TableRow>
                       ))}
-                      {/* Totals Row - Shows Cumulative Running Total */}
-                      <TableRow sx={{ bgcolor: page + 1 === totalPages ? "success.light" : "info.light" }}>
+                      {/* Totals Row */}
+                      <TableRow sx={{ bgcolor: grandTotals ? "success.light" : "info.light" }}>
                         <TableCell colSpan={2}>
                           <Typography variant="body2" fontWeight="bold">
-                            {page + 1 === totalPages 
+                            {grandTotals 
                               ? "GRAND TOTALS (ALL DRIVERS)" 
-                              : `CUMULATIVE (${cumulativeTotals.driverCount} drivers)`}
+                              : `TOTALS (${displayTotals.driverCount} drivers loaded)`}
                           </Typography>
                         </TableCell>
                         <TableCell align="right" colSpan={8}>
@@ -833,12 +903,12 @@ export default function DriverSummaryPage() {
                         </TableCell>
                         <TableCell align="right">
                           <Typography variant="body2" fontWeight="bold" color="primary.main">
-                            {formatCurrency(cumulativeTotals.netOwed)}
+                            {formatCurrency(displayTotals.netOwed)}
                           </Typography>
                         </TableCell>
                         <TableCell align="right" colSpan={2}>
                           <Typography variant="caption" color="text.secondary">
-                            {page + 1 === totalPages ? "✓ Final" : `Pages 1-${page + 1}`}
+                            {grandTotals ? "✓ Final" : `Pages 1-${page + 1}`}
                           </Typography>
                         </TableCell>
                       </TableRow>
