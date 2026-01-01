@@ -274,6 +274,66 @@ export default function HomePage() {
             </Grid>
           )}
 
+          {/* Driver Summary */}
+          {['ADMIN', 'MANAGER', 'ACCOUNTANT', 'DRIVER'].includes(user.role) && (
+            <Grid item xs={12} sm={6} md={3}>
+              <Card
+                elevation={0}
+                sx={{
+                  height: '100%',
+                  background: '#fff',
+                  borderRadius: 3,
+                  cursor: 'pointer',
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  border: '2px solid transparent',
+                  backgroundImage: 'linear-gradient(white, white), linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+                  backgroundOrigin: 'border-box',
+                  backgroundClip: 'padding-box, border-box',
+                  '&:hover': {
+                    transform: 'translateY(-8px)',
+                    boxShadow: '0 20px 40px rgba(67, 233, 123, 0.25)',
+                  }
+                }}
+                onClick={() => router.push('/driver-summary')}
+              >
+                <CardContent sx={{ p: 3, textAlign: 'center' }}>
+                  <Box
+                    sx={{
+                      width: 64,
+                      height: 64,
+                      borderRadius: 3,
+                      background: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      mx: 'auto',
+                      mb: 2,
+                      boxShadow: '0 8px 16px rgba(67, 233, 123, 0.3)'
+                    }}
+                  >
+                    <People sx={{ fontSize: 32, color: '#fff' }} />
+                  </Box>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: '#1a1a1a' }}>
+                    Driver Summary
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: '#666', mb: 2 }}>
+                    Financial overview
+                  </Typography>
+                  <Chip 
+                    label="New" 
+                    size="small"
+                    sx={{ 
+                      background: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+                      color: '#fff',
+                      fontWeight: 700,
+                      fontSize: '0.7rem'
+                    }}
+                  />
+                </CardContent>
+              </Card>
+            </Grid>
+          )}
+
           {/* Third-party Integrations */}
           {user.role === 'ADMIN' && (
             <Grid item xs={12} sm={6} md={3}>
