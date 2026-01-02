@@ -200,6 +200,7 @@ export default function DriversPage() {
     
     if (mode === "create") {
       setFormData({
+        driverNumber: "",
         firstName: "",
         lastName: "",
         licenseNumber: "",
@@ -301,6 +302,7 @@ export default function DriversPage() {
       if (dialogMode === "create") {
         // Create new driver
         const requestBody = {
+          driverNumber: formData.driverNumber || null,
           firstName: formData.firstName,
           lastName: formData.lastName,
           licenseNumber: formData.licenseNumber,
@@ -707,8 +709,30 @@ export default function DriversPage() {
           )}
 
           <Grid container spacing={2} sx={{ mt: 1 }}>
+            {/* Driver Number (only for create mode) */}
+            {dialogMode === "create" && (
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  name="driverNumber"
+                  label="Driver Number"
+                  value={formData.driverNumber}
+                  onChange={handleChange}
+                  placeholder="e.g., D001 (optional - auto-generated if blank)"
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <Badge />
+                      </InputAdornment>
+                    ),
+                  }}
+                  helperText="Leave blank to auto-generate"
+                />
+              </Grid>
+            )}
+
             {/* First Name & Last Name */}
-            <Grid item xs={6}>
+            <Grid item xs={dialogMode === "create" ? 6 : 6}>
               <TextField
                 required
                 fullWidth
