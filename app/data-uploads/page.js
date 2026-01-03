@@ -5,45 +5,39 @@ import {
   Box,
   Typography,
   Paper,
-  Button,
+  Tabs,
+  Tab,
   Alert,
-  Stepper,
-  Step,
-  StepLabel,
-  Card,
-  CardContent,
-  Grid,
 } from "@mui/material";
 import {
-  CloudUpload as UploadIcon,
-  TableChart as TableIcon,
-  CheckCircle as CheckIcon,
-  Warning as WarningIcon,
+  CreditCard as CreditCardIcon,
+  FlightTakeoff as AirportIcon,
+  Speed as MileageIcon,
 } from "@mui/icons-material";
 import GlobalNav from "../components/GlobalNav";
-import { getCurrentUser, API_BASE_URL } from "../lib/api";
-import FileUploadStep from "./components/FileUploadStep";
-import DataPreviewStep from "./components/DataPreviewStep";
-import ImportResultsStep from "./components/ImportResultsStep";
+import { getCurrentUser } from "../lib/api";
+import CreditCardUploadTab from "./components/CreditCardUploadTab";
+import AirportTripsUploadTab from "./components/AirportTripsUploadTab";
+import MileageUploadTab from "./components/MileageUploadTab";
 
-const steps = ["Upload CSV File", "Review & Edit Data", "Import Results"];
+function TabPanel({ children, value, index, ...other }) {
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`upload-tabpanel-${index}`}
+      aria-labelledby={`upload-tab-${index}`}
+      {...other}
+    >
+      {value === index && <Box sx={{ pt: 3 }}>{children}</Box>}
+    </div>
+  );
+}
 
 export default function DataUploadsPage() {
   const [currentUser, setCurrentUser] = useState(null);
-  const [activeStep, setActiveStep] = useState(0);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-
-  // Upload state
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [uploading, setUploading] = useState(false);
-  
-  // Preview state
-  const [previewData, setPreviewData] = useState(null);
-  const [editedData, setEditedData] = useState([]);
-  
-  // Import results state
-  const [importResults, setImportResults] = useState(null);
+  const [activeTab, setActiveTab] = useState(0);
+  const [globalError, setGlobalError] = useState("");
 
   useEffect(() => {
     const user = getCurrentUser();
@@ -54,115 +48,9 @@ export default function DataUploadsPage() {
     setCurrentUser(user);
   }, []);
 
-  const handleFileSelect = (file) => {
-    setSelectedFile(file);
-    setError("");
-  };
-
-  const handleUploadAndPreview = async () => {
-    if (!selectedFile) {
-      setError("Please select a file to upload");
-      return;
-    }
-
-    setUploading(true);
-    setError("");
-
-    try {
-      const formData = new FormData();
-      formData.append("file", selectedFile);
-
-      const response = await fetch(`${API_BASE_URL}/uploads/credit-card-transactions/preview`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: formData,
-      });
-
-      if (!response.ok) {
-        // Try to get error message from response
-        let errorMessage = "Failed to upload and parse CSV file";
-        try {
-          const errorData = await response.text();
-          console.error("Backend error response:", errorData);
-          errorMessage = errorData || `HTTP ${response.status}: ${response.statusText}`;
-        } catch (e) {
-          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-        }
-        throw new Error(errorMessage);
-      }
-
-      const data = await response.json();
-      setPreviewData(data);
-      setEditedData(data.previewData || []);
-      setActiveStep(1);
-      setSuccess(`File uploaded successfully! Found ${data.totalRows} transactions.`);
-    } catch (err) {
-      console.error("Upload error:", err);
-      setError("Failed to upload file: " + err.message);
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleImport = async () => {
-    if (!editedData || editedData.length === 0) {
-      setError("No data to import");
-      return;
-    }
-
-    setUploading(true);
-    setError("");
-
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/uploads/credit-card-transactions/import?filename=${encodeURIComponent(selectedFile.name)}`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(editedData),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Failed to import transactions");
-      }
-
-      const result = await response.json();
-      setImportResults(result);
-      setActiveStep(2);
-      
-      if (result.errorCount === 0) {
-        setSuccess(`Successfully imported ${result.successCount} transactions!`);
-      } else {
-        setError(`Import completed with ${result.errorCount} errors. ${result.successCount} transactions imported successfully.`);
-      }
-    } catch (err) {
-      console.error("Import error:", err);
-      setError("Failed to import transactions: " + err.message);
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleReset = () => {
-    setActiveStep(0);
-    setSelectedFile(null);
-    setPreviewData(null);
-    setEditedData([]);
-    setImportResults(null);
-    setError("");
-    setSuccess("");
-  };
-
-  const handleBack = () => {
-    setActiveStep((prev) => prev - 1);
-    setError("");
-    setSuccess("");
+  const handleTabChange = (event, newValue) => {
+    setActiveTab(newValue);
+    setGlobalError("");
   };
 
   if (!currentUser) return null;
@@ -173,140 +61,69 @@ export default function DataUploadsPage() {
 
       <Box sx={{ p: 3 }}>
         <Typography variant="h4" sx={{ mb: 1, fontWeight: 700, color: "#3e5244" }}>
-          Credit Card Transaction Uploads
+          Data Uploads
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          Upload CSV files containing credit card transactions. The system will automatically map merchants to cabs and identify drivers from shift data.
+          Upload CSV files to import credit card transactions, mileage records, and airport trip data.
         </Typography>
 
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError("")}>
-            <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
-              Upload Error
-            </Typography>
-            <Typography variant="body2" component="pre" sx={{ whiteSpace: "pre-wrap", fontSize: "0.85rem" }}>
-              {error}
-            </Typography>
-          </Alert>
-        )}
-        {success && (
-          <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess("")}>
-            {success}
+        {globalError && (
+          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setGlobalError("")}>
+            {globalError}
           </Alert>
         )}
 
-        {/* Statistics Cards */}
-        {previewData && activeStep === 1 && (
-          <Grid container spacing={2} sx={{ mb: 3 }}>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card>
-                <CardContent>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <TableIcon color="primary" />
-                    <Box>
-                      <Typography color="textSecondary" variant="body2">
-                        Total Rows
-                      </Typography>
-                      <Typography variant="h5">{previewData.totalRows}</Typography>
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card>
-                <CardContent>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <CheckIcon color="success" />
-                    <Box>
-                      <Typography color="textSecondary" variant="body2">
-                        Valid Rows
-                      </Typography>
-                      <Typography variant="h5">
-                        {previewData.statistics?.validRows || 0}
-                      </Typography>
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card>
-                <CardContent>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <CheckIcon color="info" />
-                    <Box>
-                      <Typography color="textSecondary" variant="body2">
-                        Cab Matches
-                      </Typography>
-                      <Typography variant="h5">
-                        {previewData.statistics?.cabMatches || 0}
-                      </Typography>
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card>
-                <CardContent>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <CheckIcon color="secondary" />
-                    <Box>
-                      <Typography color="textSecondary" variant="body2">
-                        Driver Matches
-                      </Typography>
-                      <Typography variant="h5">
-                        {previewData.statistics?.driverMatches || 0}
-                      </Typography>
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
-        )}
-
-        {/* Stepper */}
-        <Paper sx={{ p: 3, mb: 3 }}>
-          <Stepper activeStep={activeStep} alternativeLabel>
-            {steps.map((label) => (
-              <Step key={label}>
-                <StepLabel>{label}</StepLabel>
-              </Step>
-            ))}
-          </Stepper>
+        {/* Tabs */}
+        <Paper sx={{ mb: 3 }}>
+          <Tabs
+            value={activeTab}
+            onChange={handleTabChange}
+            indicatorColor="primary"
+            textColor="primary"
+            variant="fullWidth"
+            sx={{
+              borderBottom: 1,
+              borderColor: "divider",
+              "& .MuiTab-root": {
+                minHeight: 64,
+                fontSize: "0.95rem",
+              },
+            }}
+          >
+            <Tab
+              icon={<CreditCardIcon />}
+              iconPosition="start"
+              label="Credit Card Transactions"
+              id="upload-tab-0"
+              aria-controls="upload-tabpanel-0"
+            />
+            <Tab
+              icon={<MileageIcon />}
+              iconPosition="start"
+              label="Cab Mileage"
+              id="upload-tab-1"
+              aria-controls="upload-tabpanel-1"
+            />
+            <Tab
+              icon={<AirportIcon />}
+              iconPosition="start"
+              label="Airport Trips"
+              id="upload-tab-2"
+              aria-controls="upload-tabpanel-2"
+            />
+          </Tabs>
         </Paper>
 
-        {/* Step Content */}
-        <Paper sx={{ p: 3 }}>
-          {activeStep === 0 && (
-            <FileUploadStep
-              selectedFile={selectedFile}
-              uploading={uploading}
-              onFileSelect={handleFileSelect}
-              onUpload={handleUploadAndPreview}
-            />
-          )}
-
-          {activeStep === 1 && (
-            <DataPreviewStep
-              previewData={previewData}
-              editedData={editedData}
-              onDataChange={setEditedData}
-              onBack={handleBack}
-              onImport={handleImport}
-              importing={uploading}
-            />
-          )}
-
-          {activeStep === 2 && (
-            <ImportResultsStep
-              results={importResults}
-              onReset={handleReset}
-            />
-          )}
-        </Paper>
+        {/* Tab Panels */}
+        <TabPanel value={activeTab} index={0}>
+          <CreditCardUploadTab />
+        </TabPanel>
+        <TabPanel value={activeTab} index={1}>
+          <MileageUploadTab />
+        </TabPanel>
+        <TabPanel value={activeTab} index={2}>
+          <AirportTripsUploadTab />
+        </TabPanel>
       </Box>
     </Box>
   );
