@@ -10,23 +10,21 @@ import {
   Alert,
 } from "@mui/material";
 import {
-  CreditCard as CreditCardIcon,
-  FlightTakeoff as AirportIcon,
-  Speed as MileageIcon,
+  CloudUpload as UploadIcon,
+  TableChart as ViewIcon,
 } from "@mui/icons-material";
 import GlobalNav from "../components/GlobalNav";
 import { getCurrentUser } from "../lib/api";
-import CreditCardUploadTab from "./components/CreditCardUploadTab";
-import AirportTripsUploadTab from "./components/AirportTripsUploadTab";
-import MileageUploadTab from "./components/MileageUploadTab";
+import UploadDataSection from "./components/UploadDataSection";
+import ViewDataSection from "./components/ViewDataSection";
 
 function TabPanel({ children, value, index, ...other }) {
   return (
     <div
       role="tabpanel"
       hidden={value !== index}
-      id={`upload-tabpanel-${index}`}
-      aria-labelledby={`upload-tab-${index}`}
+      id={`main-tabpanel-${index}`}
+      aria-labelledby={`main-tab-${index}`}
       {...other}
     >
       {value === index && <Box sx={{ pt: 3 }}>{children}</Box>}
@@ -36,7 +34,7 @@ function TabPanel({ children, value, index, ...other }) {
 
 export default function DataUploadsPage() {
   const [currentUser, setCurrentUser] = useState(null);
-  const [activeTab, setActiveTab] = useState(0);
+  const [mainTab, setMainTab] = useState(0);
   const [globalError, setGlobalError] = useState("");
 
   useEffect(() => {
@@ -48,8 +46,8 @@ export default function DataUploadsPage() {
     setCurrentUser(user);
   }, []);
 
-  const handleTabChange = (event, newValue) => {
-    setActiveTab(newValue);
+  const handleMainTabChange = (event, newValue) => {
+    setMainTab(newValue);
     setGlobalError("");
   };
 
@@ -57,14 +55,14 @@ export default function DataUploadsPage() {
 
   return (
     <Box sx={{ minHeight: "100vh", backgroundColor: "#f6f9fc" }}>
-      <GlobalNav currentUser={currentUser} title="FareFlow - Data Uploads" />
+      <GlobalNav currentUser={currentUser} title="FareFlow - Data Management" />
 
       <Box sx={{ p: 3 }}>
         <Typography variant="h4" sx={{ mb: 1, fontWeight: 700, color: "#3e5244" }}>
-          Data Uploads
+          Data Management
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          Upload CSV files to import credit card transactions, mileage records, and airport trip data.
+          Upload and manage credit card transactions, mileage records, and airport trip data.
         </Typography>
 
         {globalError && (
@@ -73,56 +71,46 @@ export default function DataUploadsPage() {
           </Alert>
         )}
 
-        {/* Tabs */}
+        {/* Main Tabs: Upload Data / View Data */}
         <Paper sx={{ mb: 3 }}>
           <Tabs
-            value={activeTab}
-            onChange={handleTabChange}
+            value={mainTab}
+            onChange={handleMainTabChange}
             indicatorColor="primary"
             textColor="primary"
-            variant="fullWidth"
             sx={{
               borderBottom: 1,
               borderColor: "divider",
               "& .MuiTab-root": {
                 minHeight: 64,
-                fontSize: "0.95rem",
+                fontSize: "1rem",
+                fontWeight: 600,
               },
             }}
           >
             <Tab
-              icon={<CreditCardIcon />}
+              icon={<UploadIcon />}
               iconPosition="start"
-              label="Credit Card Transactions"
-              id="upload-tab-0"
-              aria-controls="upload-tabpanel-0"
+              label="Upload Data"
+              id="main-tab-0"
+              aria-controls="main-tabpanel-0"
             />
             <Tab
-              icon={<MileageIcon />}
+              icon={<ViewIcon />}
               iconPosition="start"
-              label="Cab Mileage"
-              id="upload-tab-1"
-              aria-controls="upload-tabpanel-1"
-            />
-            <Tab
-              icon={<AirportIcon />}
-              iconPosition="start"
-              label="Airport Trips"
-              id="upload-tab-2"
-              aria-controls="upload-tabpanel-2"
+              label="View Data"
+              id="main-tab-1"
+              aria-controls="main-tabpanel-1"
             />
           </Tabs>
         </Paper>
 
-        {/* Tab Panels */}
-        <TabPanel value={activeTab} index={0}>
-          <CreditCardUploadTab />
+        {/* Main Tab Panels */}
+        <TabPanel value={mainTab} index={0}>
+          <UploadDataSection />
         </TabPanel>
-        <TabPanel value={activeTab} index={1}>
-          <MileageUploadTab />
-        </TabPanel>
-        <TabPanel value={activeTab} index={2}>
-          <AirportTripsUploadTab />
+        <TabPanel value={mainTab} index={1}>
+          <ViewDataSection currentUser={currentUser} />
         </TabPanel>
       </Box>
     </Box>

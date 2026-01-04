@@ -26,6 +26,9 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
+  CircularProgress,
+  LinearProgress,
+  Backdrop,
 } from "@mui/material";
 import {
   CloudUpload as UploadIcon,
@@ -49,6 +52,7 @@ export default function MileageUploadTab() {
   const [success, setSuccess] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("");
   const [previewData, setPreviewData] = useState(null);
   const [editedData, setEditedData] = useState([]);
   const [importResults, setImportResults] = useState(null);
@@ -74,18 +78,23 @@ export default function MileageUploadTab() {
     }
 
     setUploading(true);
+    setLoadingMessage("Processing CSV file... This may take a few minutes for large files.");
     setError("");
 
     try {
       const formData = new FormData();
       formData.append("file", selectedFile);
 
+      const controller = new AbortController();
+      // No timeout - let it run as long as needed
+      
       const response = await fetch(`${API_BASE_URL}/uploads/mileage/preview`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
         body: formData,
+        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -103,6 +112,7 @@ export default function MileageUploadTab() {
       setError("Failed to upload file: " + err.message);
     } finally {
       setUploading(false);
+      setLoadingMessage("");
     }
   };
 
@@ -113,6 +123,7 @@ export default function MileageUploadTab() {
     }
 
     setUploading(true);
+    setLoadingMessage(`Importing ${editedData.length} records... This may take a few minutes.`);
     setError("");
 
     try {
@@ -146,6 +157,7 @@ export default function MileageUploadTab() {
       setError("Failed to import: " + err.message);
     } finally {
       setUploading(false);
+      setLoadingMessage("");
     }
   };
 
@@ -157,6 +169,7 @@ export default function MileageUploadTab() {
     setImportResults(null);
     setError("");
     setSuccess("");
+    setLoadingMessage("");
     setPage(0);
   };
 
@@ -183,6 +196,21 @@ export default function MileageUploadTab() {
 
   return (
     <Box>
+      {/* Loading Backdrop */}
+      <Backdrop
+        sx={{ 
+          color: '#fff', 
+          zIndex: (theme) => theme.zIndex.drawer + 1,
+          flexDirection: 'column',
+          gap: 2
+        }}
+        open={uploading}
+      >
+        <CircularProgress color="inherit" size={60} />
+        <Typography variant="h6">{loadingMessage || "Processing..."}</Typography>
+        <Typography variant="body2">Please do not close this page</Typography>
+      </Backdrop>
+
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError("")}>
           {error}

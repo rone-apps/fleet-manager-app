@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Box,
   Typography,
@@ -436,9 +436,8 @@ export default function DataPreviewStep({
               const canSelect = !row.driverNumber;
 
               return (
-                <>
+                <React.Fragment key={actualIndex}>
                   <TableRow
-                    key={actualIndex}
                     sx={{
                       backgroundColor: !row.valid
                         ? "#ffebee"
@@ -649,7 +648,7 @@ export default function DataPreviewStep({
                       </Collapse>
                     </TableCell>
                   </TableRow>
-                </>
+                </React.Fragment>
               );
             })}
           </TableBody>

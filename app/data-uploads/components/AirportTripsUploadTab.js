@@ -28,6 +28,8 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
+  CircularProgress,
+  Backdrop,
 } from "@mui/material";
 import {
   CloudUpload as UploadIcon,
@@ -50,6 +52,7 @@ export default function AirportTripsUploadTab() {
   const [success, setSuccess] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("");
   const [previewData, setPreviewData] = useState(null);
   const [editedData, setEditedData] = useState([]);
   const [importResults, setImportResults] = useState(null);
@@ -76,6 +79,7 @@ export default function AirportTripsUploadTab() {
     }
 
     setUploading(true);
+    setLoadingMessage("Processing CSV file and matching drivers... This may take a few minutes for large files.");
     setError("");
 
     try {
@@ -99,12 +103,20 @@ export default function AirportTripsUploadTab() {
       setPreviewData(data);
       setEditedData(data.airportTripPreviewData || []);
       setActiveStep(1);
-      setSuccess(`File uploaded! Found ${data.totalRows} records.`);
+      
+      const originalRows = data.statistics?.originalRows || data.totalRows;
+      const splitRows = data.statistics?.splitRows || data.airportTripPreviewData?.length || 0;
+      if (splitRows > originalRows) {
+        setSuccess(`File uploaded! ${originalRows} CSV rows split into ${splitRows} records (by driver/hour).`);
+      } else {
+        setSuccess(`File uploaded! Found ${data.totalRows} records.`);
+      }
     } catch (err) {
       console.error("Upload error:", err);
       setError("Failed to upload file: " + err.message);
     } finally {
       setUploading(false);
+      setLoadingMessage("");
     }
   };
 
@@ -115,6 +127,7 @@ export default function AirportTripsUploadTab() {
     }
 
     setUploading(true);
+    setLoadingMessage(`Importing ${editedData.length} records... This may take a few minutes.`);
     setError("");
 
     try {
@@ -148,6 +161,7 @@ export default function AirportTripsUploadTab() {
       setError("Failed to import: " + err.message);
     } finally {
       setUploading(false);
+      setLoadingMessage("");
     }
   };
 
@@ -159,6 +173,7 @@ export default function AirportTripsUploadTab() {
     setImportResults(null);
     setError("");
     setSuccess("");
+    setLoadingMessage("");
     setPage(0);
   };
 
@@ -170,6 +185,21 @@ export default function AirportTripsUploadTab() {
 
   return (
     <Box>
+      {/* Loading Backdrop */}
+      <Backdrop
+        sx={{ 
+          color: '#fff', 
+          zIndex: (theme) => theme.zIndex.drawer + 1,
+          flexDirection: 'column',
+          gap: 2
+        }}
+        open={uploading}
+      >
+        <CircularProgress color="inherit" size={60} />
+        <Typography variant="h6">{loadingMessage || "Processing..."}</Typography>
+        <Typography variant="body2">Please do not close this page</Typography>
+      </Backdrop>
+
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError("")}>
           {error}
@@ -184,7 +214,7 @@ export default function AirportTripsUploadTab() {
       {/* Statistics Cards */}
       {previewData && activeStep === 1 && (
         <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid item xs={12} sm={6} md={4}>
+          <Grid item xs={6} sm={3}>
             <Card>
               <CardContent>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -197,27 +227,40 @@ export default function AirportTripsUploadTab() {
               </CardContent>
             </Card>
           </Grid>
-          <Grid item xs={12} sm={6} md={4}>
+          <Grid item xs={6} sm={3}>
             <Card>
               <CardContent>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <CheckIcon color="success" />
                   <Box>
-                    <Typography color="textSecondary" variant="body2">Valid Rows</Typography>
+                    <Typography color="textSecondary" variant="body2">Valid</Typography>
                     <Typography variant="h5">{previewData.statistics?.validRows || 0}</Typography>
                   </Box>
                 </Box>
               </CardContent>
             </Card>
           </Grid>
-          <Grid item xs={12} sm={6} md={4}>
+          <Grid item xs={6} sm={3}>
             <Card>
               <CardContent>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <CheckIcon color="info" />
+                  <CheckIcon color="warning" />
                   <Box>
-                    <Typography color="textSecondary" variant="body2">Cab Matches</Typography>
-                    <Typography variant="h5">{previewData.statistics?.cabMatches || 0}</Typography>
+                    <Typography color="textSecondary" variant="body2">Day Shifts</Typography>
+                    <Typography variant="h5">{previewData.statistics?.dayShiftRows || 0}</Typography>
+                  </Box>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <Card>
+              <CardContent>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <CheckIcon color="primary" />
+                  <Box>
+                    <Typography color="textSecondary" variant="body2">Night Shifts</Typography>
+                    <Typography variant="h5">{previewData.statistics?.nightShiftRows || 0}</Typography>
                   </Box>
                 </Box>
               </CardContent>
@@ -350,20 +393,24 @@ export default function AirportTripsUploadTab() {
                   onChange={(e) => setOverwriteExisting(e.target.checked)}
                 />
               }
-              label="Overwrite existing records for same cab/date"
+              label="Overwrite existing records for same cab/shift/date"
               sx={{ mb: 2 }}
             />
+
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Trips are split by shift: DAY (4am-4pm) and NIGHT (4pm-4am). Night hours 0-3 belong to the previous day's night shift.
+            </Alert>
 
             <TableContainer component={Paper} sx={{ maxHeight: 500, mb: 3 }}>
               <Table stickyHeader size="small">
                 <TableHead>
                   <TableRow>
                     <TableCell>Status</TableCell>
-                    <TableCell>Vehicle</TableCell>
                     <TableCell>Cab #</TableCell>
+                    <TableCell>Shift</TableCell>
                     <TableCell>Date</TableCell>
                     <TableCell align="center">Total</TableCell>
-                    <TableCell>Peak Hours</TableCell>
+                    <TableCell>Hours</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -390,12 +437,19 @@ export default function AirportTripsUploadTab() {
                               </Tooltip>
                             )}
                           </TableCell>
-                          <TableCell>{row.vehicleName || "-"}</TableCell>
                           <TableCell>
                             <Chip
                               label={row.cabNumber || "N/A"}
                               size="small"
                               color={row.cabLookupSuccess ? "success" : "default"}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={row.shift || "N/A"}
+                              size="small"
+                              color={row.shift === "DAY" ? "warning" : "primary"}
+                              variant="filled"
                             />
                           </TableCell>
                           <TableCell>{row.tripDate || "-"}</TableCell>
