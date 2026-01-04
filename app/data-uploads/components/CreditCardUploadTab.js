@@ -37,6 +37,7 @@ export default function CreditCardUploadTab() {
   const [previewData, setPreviewData] = useState(null);
   const [editedData, setEditedData] = useState([]);
   const [importResults, setImportResults] = useState(null);
+  const [sessionId, setSessionId] = useState(null);
 
   const handleFileSelect = (file) => {
     setSelectedFile(file);
@@ -79,6 +80,7 @@ export default function CreditCardUploadTab() {
       const data = await response.json();
       setPreviewData(data);
       setEditedData(data.previewData || []);
+      setSessionId(data.sessionId); // Store sessionId for import
       setActiveStep(1);
       setSuccess(`File uploaded successfully! Found ${data.totalRows} transactions.`);
     } catch (err) {
@@ -91,30 +93,29 @@ export default function CreditCardUploadTab() {
   };
 
   const handleImport = async () => {
-    if (!editedData || editedData.length === 0) {
-      setError("No data to import");
+    if (!sessionId) {
+      setError("Session expired. Please re-upload the file.");
       return;
     }
 
     setUploading(true);
-    setLoadingMessage(`Importing ${editedData.length} transactions... This may take a few minutes.`);
+    setLoadingMessage(`Importing ${previewData?.totalRows || 0} transactions... This may take a few minutes.`);
     setError("");
 
     try {
       const response = await fetch(
-        `${API_BASE_URL}/uploads/credit-card-transactions/import?filename=${encodeURIComponent(selectedFile.name)}`,
+        `${API_BASE_URL}/uploads/credit-card-transactions/import?sessionId=${sessionId}&filename=${encodeURIComponent(selectedFile.name)}`,
         {
           method: "POST",
           headers: {
             Authorization: `Bearer ${localStorage.getItem("token")}`,
-            "Content-Type": "application/json",
           },
-          body: JSON.stringify(editedData),
         }
       );
 
       if (!response.ok) {
-        throw new Error("Failed to import transactions");
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to import transactions");
       }
 
       const result = await response.json();
@@ -136,11 +137,19 @@ export default function CreditCardUploadTab() {
   };
 
   const handleReset = () => {
+    // Cancel the session if exists
+    if (sessionId) {
+      fetch(`${API_BASE_URL}/uploads/credit-card-transactions/cancel/${sessionId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      }).catch(() => {});
+    }
     setActiveStep(0);
     setSelectedFile(null);
     setPreviewData(null);
     setEditedData([]);
     setImportResults(null);
+    setSessionId(null);
     setLoadingMessage("");
     setError("");
     setSuccess("");

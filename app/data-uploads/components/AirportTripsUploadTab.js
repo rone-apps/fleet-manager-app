@@ -59,6 +59,7 @@ export default function AirportTripsUploadTab() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const [overwriteExisting, setOverwriteExisting] = useState(false);
+  const [sessionId, setSessionId] = useState(null);
 
   const handleFileSelect = (event) => {
     const file = event.target.files[0];
@@ -79,7 +80,7 @@ export default function AirportTripsUploadTab() {
     }
 
     setUploading(true);
-    setLoadingMessage("Processing CSV file and matching drivers... This may take a few minutes for large files.");
+    setLoadingMessage("Processing CSV file and splitting by shift... This may take a few minutes for large files.");
     setError("");
 
     try {
@@ -102,12 +103,13 @@ export default function AirportTripsUploadTab() {
       const data = await response.json();
       setPreviewData(data);
       setEditedData(data.airportTripPreviewData || []);
+      setSessionId(data.sessionId); // Store sessionId for import
       setActiveStep(1);
       
       const originalRows = data.statistics?.originalRows || data.totalRows;
       const splitRows = data.statistics?.splitRows || data.airportTripPreviewData?.length || 0;
       if (splitRows > originalRows) {
-        setSuccess(`File uploaded! ${originalRows} CSV rows split into ${splitRows} records (by driver/hour).`);
+        setSuccess(`File uploaded! ${originalRows} CSV rows split into ${splitRows} records (by shift).`);
       } else {
         setSuccess(`File uploaded! Found ${data.totalRows} records.`);
       }
@@ -121,30 +123,29 @@ export default function AirportTripsUploadTab() {
   };
 
   const handleImport = async () => {
-    if (!editedData || editedData.length === 0) {
-      setError("No data to import");
+    if (!sessionId) {
+      setError("Session expired. Please re-upload the file.");
       return;
     }
 
     setUploading(true);
-    setLoadingMessage(`Importing ${editedData.length} records... This may take a few minutes.`);
+    setLoadingMessage(`Importing ${previewData?.statistics?.splitRows || previewData?.totalRows || 0} records... This may take a few minutes.`);
     setError("");
 
     try {
       const response = await fetch(
-        `${API_BASE_URL}/uploads/airport-trips/import?filename=${encodeURIComponent(selectedFile.name)}&overwriteExisting=${overwriteExisting}`,
+        `${API_BASE_URL}/uploads/airport-trips/import?sessionId=${sessionId}&filename=${encodeURIComponent(selectedFile.name)}&overwriteExisting=${overwriteExisting}`,
         {
           method: "POST",
           headers: {
             Authorization: `Bearer ${localStorage.getItem("token")}`,
-            "Content-Type": "application/json",
           },
-          body: JSON.stringify(editedData),
         }
       );
 
       if (!response.ok) {
-        throw new Error("Failed to import records");
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to import records");
       }
 
       const result = await response.json();
@@ -166,11 +167,19 @@ export default function AirportTripsUploadTab() {
   };
 
   const handleReset = () => {
+    // Cancel the session if exists
+    if (sessionId) {
+      fetch(`${API_BASE_URL}/uploads/airport-trips/cancel/${sessionId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      }).catch(() => {});
+    }
     setActiveStep(0);
     setSelectedFile(null);
     setPreviewData(null);
     setEditedData([]);
     setImportResults(null);
+    setSessionId(null);
     setError("");
     setSuccess("");
     setLoadingMessage("");

@@ -58,6 +58,7 @@ export default function MileageUploadTab() {
   const [importResults, setImportResults] = useState(null);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
+  const [sessionId, setSessionId] = useState(null);
 
   const handleFileSelect = (event) => {
     const file = event.target.files[0];
@@ -85,16 +86,12 @@ export default function MileageUploadTab() {
       const formData = new FormData();
       formData.append("file", selectedFile);
 
-      const controller = new AbortController();
-      // No timeout - let it run as long as needed
-      
       const response = await fetch(`${API_BASE_URL}/uploads/mileage/preview`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
         body: formData,
-        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -105,6 +102,7 @@ export default function MileageUploadTab() {
       const data = await response.json();
       setPreviewData(data);
       setEditedData(data.mileagePreviewData || []);
+      setSessionId(data.sessionId); // Store sessionId for import
       setActiveStep(1);
       setSuccess(`File uploaded! Found ${data.totalRows} records.`);
     } catch (err) {
@@ -117,30 +115,29 @@ export default function MileageUploadTab() {
   };
 
   const handleImport = async () => {
-    if (!editedData || editedData.length === 0) {
-      setError("No data to import");
+    if (!sessionId) {
+      setError("Session expired. Please re-upload the file.");
       return;
     }
 
     setUploading(true);
-    setLoadingMessage(`Importing ${editedData.length} records... This may take a few minutes.`);
+    setLoadingMessage(`Importing ${previewData?.totalRows || 0} records... This may take a few minutes.`);
     setError("");
 
     try {
       const response = await fetch(
-        `${API_BASE_URL}/uploads/mileage/import?filename=${encodeURIComponent(selectedFile.name)}`,
+        `${API_BASE_URL}/uploads/mileage/import?sessionId=${sessionId}&filename=${encodeURIComponent(selectedFile.name)}`,
         {
           method: "POST",
           headers: {
             Authorization: `Bearer ${localStorage.getItem("token")}`,
-            "Content-Type": "application/json",
           },
-          body: JSON.stringify(editedData),
         }
       );
 
       if (!response.ok) {
-        throw new Error("Failed to import records");
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to import records");
       }
 
       const result = await response.json();
@@ -162,11 +159,19 @@ export default function MileageUploadTab() {
   };
 
   const handleReset = () => {
+    // Cancel the session if exists
+    if (sessionId) {
+      fetch(`${API_BASE_URL}/uploads/mileage/cancel/${sessionId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      }).catch(() => {});
+    }
     setActiveStep(0);
     setSelectedFile(null);
     setPreviewData(null);
     setEditedData([]);
     setImportResults(null);
+    setSessionId(null);
     setError("");
     setSuccess("");
     setLoadingMessage("");

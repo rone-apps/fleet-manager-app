@@ -565,34 +565,34 @@ function MileageDataView({ currentUser }) {
           <Table stickyHeader size="small">
             <TableHead>
               <TableRow>
+                <TableCell>Logon Date</TableCell>
                 <TableCell>Cab #</TableCell>
                 <TableCell>Driver #</TableCell>
                 <TableCell>Logon Time</TableCell>
                 <TableCell>Logoff Time</TableCell>
-                <TableCell align="right">Mileage A (Tariff 1)</TableCell>
-                <TableCell align="right">Mileage B (Tariff 2)</TableCell>
-                <TableCell align="right">Mileage C (Paid)</TableCell>
-                <TableCell align="right">Total Mileage</TableCell>
-                <TableCell align="right">Shift Hours</TableCell>
+                <TableCell align="right">Mileage A</TableCell>
+                <TableCell align="right">Mileage B</TableCell>
+                <TableCell align="right">Total</TableCell>
                 <TableCell align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={10} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
                     <CircularProgress />
                   </TableCell>
                 </TableRow>
               ) : data.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
                     No data found. Use filters and click Search.
                   </TableCell>
                 </TableRow>
               ) : (
                 data.map((row) => (
                   <TableRow key={row.id}>
+                    <TableCell>{row.logonTime ? row.logonTime.split('T')[0] : "-"}</TableCell>
                     <TableCell>
                       <Chip label={row.cabNumber || "-"} size="small" />
                     </TableCell>
@@ -615,13 +615,11 @@ function MileageDataView({ currentUser }) {
                         />
                       )}
                     </TableCell>
-                    <TableCell>{row.logonTime ? new Date(row.logonTime).toLocaleString() : "-"}</TableCell>
-                    <TableCell>{row.logoffTime ? new Date(row.logoffTime).toLocaleString() : "-"}</TableCell>
-                    <TableCell align="right">{row.mileageA?.toFixed(3) || "-"}</TableCell>
-                    <TableCell align="right">{row.mileageB?.toFixed(3) || "-"}</TableCell>
-                    <TableCell align="right">{row.mileageC?.toFixed(3) || "-"}</TableCell>
-                    <TableCell align="right">{row.totalMileage?.toFixed(3) || "-"}</TableCell>
-                    <TableCell align="right">{row.shiftHours?.toFixed(2) || "-"}</TableCell>
+                    <TableCell>{row.logonTime ? row.logonTime.split('T')[1]?.substring(0,5) : "-"}</TableCell>
+                    <TableCell>{row.logoffTime ? row.logoffTime.split('T')[1]?.substring(0,5) : "-"}</TableCell>
+                    <TableCell align="right">{row.mileageA?.toFixed(2) || "0.00"}</TableCell>
+                    <TableCell align="right">{row.mileageB?.toFixed(2) || "0.00"}</TableCell>
+                    <TableCell align="right">{row.totalMileage?.toFixed(2) || "0.00"}</TableCell>
                     <TableCell align="right">
                       {editingId === row.id ? (
                         <>
