@@ -175,7 +175,7 @@ export default function InvoicesTab({
                       {invoice.invoiceNumber}
                     </Typography>
                   </TableCell>
-                  <TableCell>{invoice.customer?.companyName || 'N/A'}</TableCell>
+                  <TableCell>{invoice.customerName || 'N/A'}</TableCell>
                   <TableCell>{formatDate(invoice.invoiceDate)}</TableCell>
                   <TableCell>
                     <Box>

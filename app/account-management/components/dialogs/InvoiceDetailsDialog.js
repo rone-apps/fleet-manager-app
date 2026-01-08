@@ -303,22 +303,7 @@ export default function InvoiceDetailsDialog({
               <h1 style={{ margin: '0 0 10px 0', fontSize: '28px' }}>INVOICE</h1>
               <div style={{ marginTop: '20px' }}>
                 <strong>Bill To:</strong><br />
-                <strong>{selectedInvoice.customer?.companyName || 'N/A'}</strong><br />
-                {selectedInvoice.customer?.streetAddress && (
-                  <>{selectedInvoice.customer.streetAddress}<br /></>
-                )}
-                {selectedInvoice.customer?.city && selectedInvoice.customer?.province && (
-                  <>{selectedInvoice.customer.city}, {selectedInvoice.customer.province}<br /></>
-                )}
-                {selectedInvoice.customer?.postalCode && (
-                  <>{selectedInvoice.customer.postalCode}<br /></>
-                )}
-                {selectedInvoice.customer?.email && (
-                  <>Email: {selectedInvoice.customer.email}<br /></>
-                )}
-                {selectedInvoice.customer?.phoneNumber && (
-                  <>Phone: {selectedInvoice.customer.phoneNumber}</>
-                )}
+                <strong>{selectedInvoice.customerName || 'N/A'}</strong>
               </div>
             </div>
             <div className="invoice-info">
@@ -426,11 +411,8 @@ export default function InvoiceDetailsDialog({
               <Grid item xs={6}>
                 <Typography variant="caption" color="textSecondary">Customer</Typography>
                 <Typography variant="body1" fontWeight="bold">
-                  {selectedInvoice.customer?.companyName || 'N/A'}
+                  {selectedInvoice.customerName || 'N/A'}
                 </Typography>
-                {selectedInvoice.customer?.email && (
-                  <Typography variant="body2">{selectedInvoice.customer.email}</Typography>
-                )}
               </Grid>
               <Grid item xs={6}>
                 <Typography variant="caption" color="textSecondary">Dates</Typography>
