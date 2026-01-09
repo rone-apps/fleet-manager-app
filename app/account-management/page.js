@@ -199,9 +199,11 @@ export default function AccountManagementPage() {
         {/* Statistics Cards */}
         <StatisticsCards
           customers={customers}
+          filteredCustomers={filteredCustomers}
           charges={charges}
           filteredCharges={filteredCharges}
           invoices={invoices}
+          filteredInvoices={filteredInvoices}
           currentTab={currentTab}
         />
 

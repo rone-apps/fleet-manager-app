@@ -18,17 +18,33 @@ import { formatCurrency } from "../utils/helpers";
 
 export default function StatisticsCards({
   customers = [],
+  filteredCustomers = [],
   charges = [],
   filteredCharges = [],
   invoices = [],
+  filteredInvoices = [],
   currentTab,
 }) {
   // Ensure all props are always arrays
-  const safeFilteredCharges = Array.isArray(filteredCharges) ? filteredCharges : [];
-  const safeCharges = Array.isArray(charges) ? charges : [];
   const safeCustomers = Array.isArray(customers) ? customers : [];
+  const safeFilteredCustomers = Array.isArray(filteredCustomers) ? filteredCustomers : [];
+  const safeCharges = Array.isArray(charges) ? charges : [];
+  const safeFilteredCharges = Array.isArray(filteredCharges) ? filteredCharges : [];
   const safeInvoices = Array.isArray(invoices) ? invoices : [];
-  
+  const safeFilteredInvoices = Array.isArray(filteredInvoices) ? filteredInvoices : [];
+
+  // Calculate displayed data based on current tab
+  // Tab 0: Customers, Tab 1: Trip Charges, Tab 2: All Charges, Tab 3: Invoices
+  const displayedCharges = currentTab === 1 ? safeCharges : safeFilteredCharges;
+  const displayedCustomers = currentTab === 0 ? safeFilteredCustomers : safeCustomers;
+  const displayedInvoices = currentTab === 3 ? safeFilteredInvoices : safeInvoices;
+
+  const totalCharges = displayedCharges.length;
+  const unpaidCharges = displayedCharges.filter(c => !c.paid).length;
+  const outstandingBalance = displayedCharges
+    .filter(c => !c.paid)
+    .reduce((sum, c) => sum + (c.amount || 0), 0);
+
   return (
     <Grid container spacing={3} sx={{ mb: 3 }}>
       <Grid item xs={12} sm={6} md={2.4}>
@@ -40,7 +56,7 @@ export default function StatisticsCards({
                 <Typography color="textSecondary" variant="body2">
                   Total Customers
                 </Typography>
-                <Typography variant="h5">{safeCustomers.length}</Typography>
+                <Typography variant="h5">{displayedCustomers.length}</Typography>
               </Box>
             </Box>
           </CardContent>
@@ -57,7 +73,7 @@ export default function StatisticsCards({
                   Active Customers
                 </Typography>
                 <Typography variant="h5">
-                  {safeCustomers.filter(c => c.active).length}
+                  {displayedCustomers.filter(c => c.active).length}
                 </Typography>
               </Box>
             </Box>
@@ -74,9 +90,7 @@ export default function StatisticsCards({
                 <Typography color="textSecondary" variant="body2">
                   Total Charges
                 </Typography>
-                <Typography variant="h5">
-                  {currentTab === 2 ? safeFilteredCharges.length : safeCharges.length}
-                </Typography>
+                <Typography variant="h5">{totalCharges}</Typography>
               </Box>
             </Box>
           </CardContent>
@@ -92,11 +106,7 @@ export default function StatisticsCards({
                 <Typography color="textSecondary" variant="body2">
                   Unpaid Charges
                 </Typography>
-                <Typography variant="h5">
-                  {currentTab === 2 
-                    ? safeFilteredCharges.filter(c => !c.paid).length 
-                    : safeCharges.filter(c => !c.paid).length}
-                </Typography>
+                <Typography variant="h5">{unpaidCharges}</Typography>
               </Box>
             </Box>
           </CardContent>
@@ -113,11 +123,7 @@ export default function StatisticsCards({
                   Outstanding Balance
                 </Typography>
                 <Typography variant="h5">
-                  {formatCurrency(
-                    safeInvoices
-                      .filter(i => ["SENT", "PARTIAL", "OVERDUE"].includes(i.status))
-                      .reduce((sum, i) => sum + i.balanceDue, 0)
-                  )}
+                  {formatCurrency(outstandingBalance)}
                 </Typography>
               </Box>
             </Box>

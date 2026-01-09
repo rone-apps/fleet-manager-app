@@ -51,6 +51,11 @@ export default function AllChargesTab({
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   
+  // Grand totals state (for all filtered data across all pages)
+  const [grandTotalFare, setGrandTotalFare] = useState(0);
+  const [grandTotalTip, setGrandTotalTip] = useState(0);
+  const [grandTotalAmount, setGrandTotalAmount] = useState(0);
+  
   // Sorting state
   const [orderBy, setOrderBy] = useState("tripDate");
   const [order, setOrder] = useState("desc");
@@ -102,6 +107,11 @@ export default function AllChargesTab({
 
   // Sort cabs by cab number (natural sort)
   const sortedCabs = cabs ? [...cabs].sort((a, b) => naturalSort(a.cabNumber, b.cabNumber)) : [];
+
+  // Calculate totals for current page
+  const pageTotalFare = charges.reduce((sum, c) => sum + (parseFloat(c.fareAmount) || 0), 0);
+  const pageTotalTip = charges.reduce((sum, c) => sum + (parseFloat(c.tipAmount) || 0), 0);
+  const pageTotalAmount = pageTotalFare + pageTotalTip;
 
   // Sort drivers by name (first name, then last name)
   const sortedDrivers = drivers ? [...drivers].sort((a, b) => {
@@ -214,6 +224,16 @@ export default function AllChargesTab({
         setTotalItems(data.totalItems || 0);
         setTotalPages(data.totalPages || 0);
         setBulkEditAllCharges(data.content?.map(c => ({ ...c })) || []);
+        
+        // Set grand totals from API response if available, otherwise fetch separately
+        if (data.totalFareAmount !== undefined) {
+          setGrandTotalFare(data.totalFareAmount || 0);
+          setGrandTotalTip(data.totalTipAmount || 0);
+          setGrandTotalAmount((data.totalFareAmount || 0) + (data.totalTipAmount || 0));
+        } else {
+          // Fetch grand totals separately if not in paginated response
+          fetchGrandTotals(filters);
+        }
       } else {
         const errorText = await response.text();
         console.error('❌ Failed to load charges:', {
@@ -233,6 +253,46 @@ export default function AllChargesTab({
       setLoading(false);
     }
   }, [page, rowsPerPage, orderBy, order, appliedCustomerName, appliedCabId, appliedDriverId, appliedStartDate, appliedEndDate, appliedPaidStatus]);
+
+  // Fetch grand totals for all filtered data (separate API call)
+  const fetchGrandTotals = useCallback(async (filters) => {
+    try {
+      const token = localStorage.getItem("token");
+      
+      // Build query parameters with same filters but request totals
+      const params = new URLSearchParams();
+      if (filters.customerName) params.append('customerName', filters.customerName);
+      if (filters.cabId) params.append('cabId', filters.cabId);
+      if (filters.driverId) params.append('driverId', filters.driverId);
+      if (filters.startDate) params.append('startDate', filters.startDate);
+      if (filters.endDate) params.append('endDate', filters.endDate);
+      if (filters.paidStatus !== 'all') params.append('paid', filters.paidStatus === 'paid');
+      
+      // Try to fetch totals from a dedicated endpoint first
+      const totalsUrl = `${API_BASE_URL}/account-charges/totals?${params.toString()}`;
+      const response = await fetch(totalsUrl, {
+        headers: { 
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+      });
+      
+      if (response.ok) {
+        const totals = await response.json();
+        setGrandTotalFare(totals.totalFareAmount || 0);
+        setGrandTotalTip(totals.totalTipAmount || 0);
+        setGrandTotalAmount((totals.totalFareAmount || 0) + (totals.totalTipAmount || 0));
+      } else {
+        // If no totals endpoint, set grand totals to 0 (page totals will still show)
+        console.log('Totals endpoint not available, using page totals only');
+        setGrandTotalFare(0);
+        setGrandTotalTip(0);
+        setGrandTotalAmount(0);
+      }
+    } catch (err) {
+      console.error("Error fetching grand totals:", err);
+    }
+  }, []);
 
   // Load charges with pagination and filters
   useEffect(() => {
@@ -608,16 +668,35 @@ export default function AllChargesTab({
               <TableCell>Pickup</TableCell>
               <TableCell>Dropoff</TableCell>
               <TableCell align="right">
-                <TableSortLabel
-                  active={orderBy === "fareAmount"}
-                  direction={orderBy === "fareAmount" ? order : "asc"}
-                  onClick={() => handleRequestSort("fareAmount")}
-                >
-                  Fare
-                </TableSortLabel>
+                <Box>
+                  <TableSortLabel
+                    active={orderBy === "fareAmount"}
+                    direction={orderBy === "fareAmount" ? order : "asc"}
+                    onClick={() => handleRequestSort("fareAmount")}
+                  >
+                    Fare
+                  </TableSortLabel>
+                  <Typography variant="h6" display="block" color="primary" fontWeight="bold" sx={{ fontSize: '1.1rem' }}>
+                    ${grandTotalFare > 0 ? grandTotalFare.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : pageTotalFare.toFixed(2)}
+                  </Typography>
+                </Box>
               </TableCell>
-              <TableCell align="right">Tip</TableCell>
-              <TableCell align="right">Total</TableCell>
+              <TableCell align="right">
+                <Box>
+                  <Typography variant="body2">Tip</Typography>
+                  <Typography variant="h6" display="block" color="primary" fontWeight="bold" sx={{ fontSize: '1.1rem' }}>
+                    ${grandTotalTip > 0 ? grandTotalTip.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : pageTotalTip.toFixed(2)}
+                  </Typography>
+                </Box>
+              </TableCell>
+              <TableCell align="right">
+                <Box>
+                  <Typography variant="body2">Total</Typography>
+                  <Typography variant="h6" display="block" color="success.main" fontWeight="bold" sx={{ fontSize: '1.2rem' }}>
+                    ${grandTotalAmount > 0 ? grandTotalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : pageTotalAmount.toFixed(2)}
+                  </Typography>
+                </Box>
+              </TableCell>
               <TableCell>Status</TableCell>
               {!allChargesBulkEdit && canEdit && <TableCell align="right">Actions</TableCell>}
             </TableRow>

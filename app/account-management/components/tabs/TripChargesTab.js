@@ -52,6 +52,11 @@ export default function TripChargesTab({
 }) {
   const [customerSearch, setCustomerSearch] = useState("");
 
+  // Calculate totals for displayed charges
+  const totalFare = charges.reduce((sum, c) => sum + (parseFloat(c.fareAmount) || 0), 0);
+  const totalTip = charges.reduce((sum, c) => sum + (parseFloat(c.tipAmount) || 0), 0);
+  const totalAmount = totalFare + totalTip;
+
   // Filter customers based on search term
   const filteredCustomers = customers
     .filter(c => c.active)
@@ -207,9 +212,30 @@ export default function TripChargesTab({
                       <TableCell>Passenger</TableCell>
                       <TableCell>Pickup</TableCell>
                       <TableCell>Dropoff</TableCell>
-                      <TableCell align="right">Fare</TableCell>
-                      <TableCell align="right">Tip</TableCell>
-                      <TableCell align="right">Total</TableCell>
+                      <TableCell align="right">
+                        <Box>
+                          <Typography variant="body2">Fare</Typography>
+                          <Typography variant="h6" display="block" color="primary" fontWeight="bold" sx={{ fontSize: '1.1rem' }}>
+                            ${totalFare.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Box>
+                          <Typography variant="body2">Tip</Typography>
+                          <Typography variant="h6" display="block" color="primary" fontWeight="bold" sx={{ fontSize: '1.1rem' }}>
+                            ${totalTip.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Box>
+                          <Typography variant="body2">Total</Typography>
+                          <Typography variant="h6" display="block" color="success.main" fontWeight="bold" sx={{ fontSize: '1.2rem' }}>
+                            ${totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </Typography>
+                        </Box>
+                      </TableCell>
                       <TableCell>Status</TableCell>
                       {!bulkEditMode && canEdit && <TableCell align="right">Actions</TableCell>}
                     </TableRow>
