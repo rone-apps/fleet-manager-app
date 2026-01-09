@@ -108,6 +108,8 @@ export function useAccountManagement() {
   const [openGenerateInvoiceDialog, setOpenGenerateInvoiceDialog] = useState(false);
   const [openInvoiceDetailsDialog, setOpenInvoiceDetailsDialog] = useState(false);
   const [openRecordPaymentDialog, setOpenRecordPaymentDialog] = useState(false);
+  const [openCancelInvoiceDialog, setOpenCancelInvoiceDialog] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
   const [generateInvoiceFormData, setGenerateInvoiceFormData] = useState(initialGenerateInvoiceFormData);
   const [paymentFormData, setPaymentFormData] = useState(initialPaymentFormData);
   const [invoiceFilterCustomerId, setInvoiceFilterCustomerId] = useState("");
@@ -803,13 +805,23 @@ export function useAccountManagement() {
     }
   }, [loadInvoices]);
 
-  const handleCancelInvoice = useCallback(async (invoiceId) => {
-    const reason = prompt("Enter reason for cancellation:");
-    if (!reason) return;
+  const handleOpenCancelInvoiceDialog = useCallback((invoice) => {
+    setSelectedInvoice(invoice);
+    setCancelReason("");
+    setError("");
+    setSuccess("");
+    setOpenCancelInvoiceDialog(true);
+  }, []);
+
+  const handleCancelInvoice = useCallback(async () => {
+    if (!cancelReason.trim()) {
+      setError("Please enter a reason for cancellation");
+      return;
+    }
 
     try {
       const response = await fetch(
-        `${API_BASE_URL}/invoices/${invoiceId}/cancel?reason=${encodeURIComponent(reason)}`,
+        `${API_BASE_URL}/invoices/${selectedInvoice.id}/cancel?reason=${encodeURIComponent(cancelReason)}`,
         {
           method: "PUT",
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
@@ -818,6 +830,7 @@ export function useAccountManagement() {
 
       if (response.ok) {
         setSuccess("Invoice cancelled");
+        setOpenCancelInvoiceDialog(false);
         loadInvoices();
         if (openInvoiceDetailsDialog) {
           setOpenInvoiceDetailsDialog(false);
@@ -829,7 +842,7 @@ export function useAccountManagement() {
       console.error("Error cancelling invoice:", err);
       setError("Failed to cancel invoice");
     }
-  }, [loadInvoices, openInvoiceDetailsDialog]);
+  }, [cancelReason, selectedInvoice, loadInvoices, openInvoiceDetailsDialog]);
 
   const handleOpenRecordPaymentDialog = useCallback((invoice) => {
     setSelectedInvoice(invoice);
@@ -1037,6 +1050,10 @@ export function useAccountManagement() {
     setOpenInvoiceDetailsDialog,
     openRecordPaymentDialog,
     setOpenRecordPaymentDialog,
+    openCancelInvoiceDialog,
+    setOpenCancelInvoiceDialog,
+    cancelReason,
+    setCancelReason,
     generateInvoiceFormData,
     setGenerateInvoiceFormData,
     paymentFormData,
@@ -1049,6 +1066,7 @@ export function useAccountManagement() {
     handleGenerateInvoice,
     handleViewInvoice,
     handleSendInvoice,
+    handleOpenCancelInvoiceDialog,
     handleCancelInvoice,
     handleOpenRecordPaymentDialog,
     handleRecordPayment,

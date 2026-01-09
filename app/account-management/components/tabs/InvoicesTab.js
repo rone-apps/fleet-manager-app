@@ -45,7 +45,7 @@ export default function InvoicesTab({
   handleOpenGenerateInvoiceDialog,
   handleViewInvoice,
   handleSendInvoice,
-  handleCancelInvoice,
+  handleOpenCancelInvoiceDialog,
   handleOpenRecordPaymentDialog,
 }) {
   console.log('🧾 InvoicesTab rendered with filteredInvoices:', filteredInvoices);
@@ -245,7 +245,7 @@ export default function InvoicesTab({
                       <IconButton
                         size="small"
                         color="error"
-                        onClick={() => handleCancelInvoice(invoice.id)}
+                        onClick={() => handleOpenCancelInvoiceDialog(invoice)}
                         title="Cancel Invoice"
                       >
                         <CancelInvoiceIcon fontSize="small" />

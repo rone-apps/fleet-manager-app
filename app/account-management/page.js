@@ -28,6 +28,7 @@ import {
   GenerateInvoiceDialog,
   InvoiceDetailsDialog,
   RecordPaymentDialog,
+  CancelInvoiceDialog,
 } from "./components";
 
 export default function AccountManagementPage() {
@@ -134,6 +135,10 @@ export default function AccountManagementPage() {
     setOpenInvoiceDetailsDialog,
     openRecordPaymentDialog,
     setOpenRecordPaymentDialog,
+    openCancelInvoiceDialog,
+    setOpenCancelInvoiceDialog,
+    cancelReason,
+    setCancelReason,
     generateInvoiceFormData,
     setGenerateInvoiceFormData,
     paymentFormData,
@@ -146,6 +151,7 @@ export default function AccountManagementPage() {
     handleGenerateInvoice,
     handleViewInvoice,
     handleSendInvoice,
+    handleOpenCancelInvoiceDialog,
     handleCancelInvoice,
     handleOpenRecordPaymentDialog,
     handleRecordPayment,
@@ -302,7 +308,7 @@ export default function AccountManagementPage() {
               handleOpenGenerateInvoiceDialog={handleOpenGenerateInvoiceDialog}
               handleViewInvoice={handleViewInvoice}
               handleSendInvoice={handleSendInvoice}
-              handleCancelInvoice={handleCancelInvoice}
+              handleOpenCancelInvoiceDialog={handleOpenCancelInvoiceDialog}
               handleOpenRecordPaymentDialog={handleOpenRecordPaymentDialog}
             />
           )}
@@ -376,6 +382,16 @@ export default function AccountManagementPage() {
           paymentFormData={paymentFormData}
           setPaymentFormData={setPaymentFormData}
           handleRecordPayment={handleRecordPayment}
+          error={error}
+        />
+
+        <CancelInvoiceDialog
+          open={openCancelInvoiceDialog}
+          onClose={() => setOpenCancelInvoiceDialog(false)}
+          selectedInvoice={selectedInvoice}
+          cancelReason={cancelReason}
+          setCancelReason={setCancelReason}
+          handleCancelInvoice={handleCancelInvoice}
           error={error}
         />
       </Box>
