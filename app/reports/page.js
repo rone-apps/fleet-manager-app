@@ -216,7 +216,17 @@ export default function ReportsPage() {
         console.error('❌ Other revenue request failed:', otherRevenueRes.reason);
       } else {
         console.log('✅ Other revenue fetched (raw count):', Array.isArray(otherRevenueAll) ? otherRevenueAll.length : 0);
+        // Debug: log the actual data structure
+        if (Array.isArray(otherRevenueAll) && otherRevenueAll.length > 0) {
+          console.log('✅ Other revenue first item structure:', JSON.stringify(otherRevenueAll[0], null, 2));
+        }
       }
+
+      // ✅ DEBUG: Log what we're filtering with
+      console.log('🔍 Selected driver for filtering:', {
+        id: selectedDriver?.id,
+        driverNumber: selectedDriver?.driverNumber
+      });
 
       const fixedOneTimeExpenses = Array.isArray(fixedExpenses?.expenseItems)
         ? fixedExpenses.expenseItems.filter((item) => item?.expenseType === "ONE_TIME")
@@ -251,52 +261,93 @@ export default function ReportsPage() {
 
       const reportOneTimeExpenses = fixedOneTimeExpenses.length > 0 ? fixedOneTimeExpenses : oneTimeExpenses;
 
+      // ✅ FIXED: Updated filtering logic to work with new DTO flat structure
+      // The DTO now has flat properties: driverId, driverNumber, ownerId, ownerNumber
+      // Also check entityId against both driver.id AND driverNumber (since entityId might store either)
       const otherRevenue = Array.isArray(otherRevenueAll)
         ? otherRevenueAll.filter((rev) => {
           const selectedDriverIdStr = selectedDriver?.id != null ? String(selectedDriver.id) : "";
           const selectedDriverNumberStr = selectedDriver?.driverNumber != null ? String(selectedDriver.driverNumber) : "";
 
-          const revDriverIdStr = rev?.driver?.id != null ? String(rev.driver.id) : null;
-          const revOwnerIdStr = rev?.owner?.id != null ? String(rev.owner.id) : null;
-
-          const revDriverNumberStr = rev?.driver?.driverNumber != null ? String(rev.driver.driverNumber) : null;
-          const revOwnerNumberStr = rev?.owner?.driverNumber != null ? String(rev.owner.driverNumber) : null;
-
-          const directDriverNumberStr = rev?.driverNumber != null ? String(rev.driverNumber) : null;
-          const directOwnerNumberStr = rev?.ownerDriverNumber != null ? String(rev.ownerDriverNumber) : null;
-
+          // ✅ NEW DTO flat structure
+          const revDriverIdStr = rev?.driverId != null ? String(rev.driverId) : null;
+          const revOwnerIdStr = rev?.ownerId != null ? String(rev.ownerId) : null;
+          const revDriverNumberStr = rev?.driverNumber != null ? String(rev.driverNumber) : null;
+          const revOwnerNumberStr = rev?.ownerNumber != null ? String(rev.ownerNumber) : null;
           const revEntityIdStr = rev?.entityId != null ? String(rev.entityId) : null;
 
+          // Also support legacy nested structure for backwards compatibility
+          const legacyDriverIdStr = rev?.driver?.id != null ? String(rev.driver.id) : null;
+          const legacyOwnerIdStr = rev?.owner?.id != null ? String(rev.owner.id) : null;
+          const legacyDriverNumberStr = rev?.driver?.driverNumber != null ? String(rev.driver.driverNumber) : null;
+          const legacyOwnerNumberStr = rev?.owner?.driverNumber != null ? String(rev.owner.driverNumber) : null;
+
+          // Debug logging
+          console.log('🔍 Filtering revenue item:', {
+            id: rev?.id,
+            entityType: rev?.entityType,
+            entityId: revEntityIdStr,
+            driverId: revDriverIdStr,
+            driverNumber: revDriverNumberStr,
+            ownerId: revOwnerIdStr,
+            ownerNumber: revOwnerNumberStr,
+            selectedDriverId: selectedDriverIdStr,
+            selectedDriverNumber: selectedDriverNumberStr
+          });
+
           if (rev?.entityType === "DRIVER") {
-            return (
+            const match = (
+              // Match entityId to driver.id
               (revEntityIdStr != null && revEntityIdStr === selectedDriverIdStr) ||
+              // Match entityId to driverNumber (in case entityId stores the driver number)
+              (revEntityIdStr != null && revEntityIdStr === selectedDriverNumberStr) ||
+              // Match driverId from DTO
               (revDriverIdStr != null && revDriverIdStr === selectedDriverIdStr) ||
-              revDriverNumberStr === selectedDriverNumberStr ||
-              directDriverNumberStr === selectedDriverNumberStr
+              // Match driverNumber from DTO
+              (revDriverNumberStr != null && revDriverNumberStr === selectedDriverNumberStr) ||
+              // Legacy support
+              (legacyDriverIdStr != null && legacyDriverIdStr === selectedDriverIdStr) ||
+              (legacyDriverNumberStr != null && legacyDriverNumberStr === selectedDriverNumberStr)
             );
+            console.log('🔍 DRIVER match result:', match);
+            return match;
           }
 
           if (rev?.entityType === "OWNER") {
-            return (
+            const match = (
+              // Match entityId to driver.id (owner is also a driver)
               (revEntityIdStr != null && revEntityIdStr === selectedDriverIdStr) ||
+              // Match entityId to driverNumber
+              (revEntityIdStr != null && revEntityIdStr === selectedDriverNumberStr) ||
+              // Match ownerId from DTO
               (revOwnerIdStr != null && revOwnerIdStr === selectedDriverIdStr) ||
-              revOwnerNumberStr === selectedDriverNumberStr ||
-              directOwnerNumberStr === selectedDriverNumberStr
+              // Match ownerNumber from DTO
+              (revOwnerNumberStr != null && revOwnerNumberStr === selectedDriverNumberStr) ||
+              // Legacy support
+              (legacyOwnerIdStr != null && legacyOwnerIdStr === selectedDriverIdStr) ||
+              (legacyOwnerNumberStr != null && legacyOwnerNumberStr === selectedDriverNumberStr)
             );
+            console.log('🔍 OWNER match result:', match);
+            return match;
           }
 
-          // For other entity types (CAB/SHIFT/COMPANY/etc.), only include if there's an explicit
+          // For other entity types (CAB/SHIFT/COMPANY/etc.), include if there's an explicit
           // association to the selected driver (by id or driverNumber).
           if (revDriverIdStr != null && revDriverIdStr === selectedDriverIdStr) return true;
           if (revOwnerIdStr != null && revOwnerIdStr === selectedDriverIdStr) return true;
           if (revDriverNumberStr != null && revDriverNumberStr === selectedDriverNumberStr) return true;
           if (revOwnerNumberStr != null && revOwnerNumberStr === selectedDriverNumberStr) return true;
-          if (directDriverNumberStr != null && directDriverNumberStr === selectedDriverNumberStr) return true;
-          if (directOwnerNumberStr != null && directOwnerNumberStr === selectedDriverNumberStr) return true;
+          // Legacy support
+          if (legacyDriverIdStr != null && legacyDriverIdStr === selectedDriverIdStr) return true;
+          if (legacyOwnerIdStr != null && legacyOwnerIdStr === selectedDriverIdStr) return true;
+          if (legacyDriverNumberStr != null && legacyDriverNumberStr === selectedDriverNumberStr) return true;
+          if (legacyOwnerNumberStr != null && legacyOwnerNumberStr === selectedDriverNumberStr) return true;
 
           return false;
         })
         : [];
+      
+      console.log('✅ Other revenue after filtering:', otherRevenue.length, 'of', otherRevenueAll?.length || 0);
 
       console.log('✅ Lease Revenue Total:', leaseRevenue?.totalRevenue || leaseRevenue?.grandTotalLease || 0);
       console.log('✅ Credit Card Total:', creditCardRevenue?.grandTotal || 0);
@@ -543,7 +594,7 @@ export default function ReportsPage() {
                     </Typography>
                   </Box>
                   <Typography variant="h5" sx={{ fontWeight: 700, color: '#2e7d32' }}>
-                    ${reportData.totalRevenue.toFixed(2)}
+                    ${(reportData?.totalRevenue ?? 0).toFixed(2)}
                   </Typography>
                 </CardContent>
               </Card>
@@ -559,7 +610,7 @@ export default function ReportsPage() {
                     </Typography>
                   </Box>
                   <Typography variant="h5" sx={{ fontWeight: 700, color: '#c62828' }}>
-                    ${reportData.totalExpenses.toFixed(2)}
+                    ${(reportData?.totalExpenses ?? 0).toFixed(2)}
                   </Typography>
                 </CardContent>
               </Card>
@@ -575,28 +626,28 @@ export default function ReportsPage() {
                     </Typography>
                   </Box>
                   <Typography variant="h5" sx={{ fontWeight: 700, color: '#1565c0' }}>
-                    ${reportData.amountPaid.toFixed(2)}
+                    ${(reportData?.amountPaid ?? 0).toFixed(2)}
                   </Typography>
                 </CardContent>
               </Card>
             </Grid>
 
             <Grid item xs={12} sm={6} md={2.4}>
-              <Card sx={{ height: '100%', bgcolor: reportData.amountDue < 0 ? '#ffebee' : '#e8f5e9' }}>
+              <Card sx={{ height: '100%', bgcolor: (reportData?.amountDue ?? 0) < 0 ? '#ffebee' : '#e8f5e9' }}>
                 <CardContent>
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                    <AccountBalance sx={{ color: reportData.amountDue < 0 ? '#c62828' : '#2e7d32', mr: 1 }} />
+                    <AccountBalance sx={{ color: (reportData?.amountDue ?? 0) < 0 ? '#c62828' : '#2e7d32', mr: 1 }} />
                     <Typography variant="caption" color="textSecondary">
                       Amount Due/Owing
                     </Typography>
                   </Box>
                   <Typography
                     variant="h5"
-                    sx={{ fontWeight: 700, color: reportData.amountDue < 0 ? '#c62828' : '#2e7d32' }}
+                    sx={{ fontWeight: 700, color: (reportData?.amountDue ?? 0) < 0 ? '#c62828' : '#2e7d32' }}
                   >
-                    {reportData.amountDue < 0
-                      ? `($${Math.abs(reportData.amountDue).toFixed(2)})`
-                      : `$${Math.abs(reportData.amountDue).toFixed(2)}`}
+                    {(reportData?.amountDue ?? 0) < 0
+                            ? `($${Math.abs(reportData?.amountDue ?? 0).toFixed(2)})`
+                            : `$${Math.abs(reportData?.amountDue ?? 0).toFixed(2)}`}
                   </Typography>
                 </CardContent>
               </Card>
@@ -693,14 +744,164 @@ export default function ReportsPage() {
         </DialogTitle>
 
         <DialogContent dividers>
-          {/* Dialog content remains the same */}
           {!reportData ? (
             <Typography color="text.secondary">No report data available.</Typography>
           ) : (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-              {/* Same detailed content as before */}
-              <Typography variant="body2">Report details displayed here...</Typography>
-            </Box>
+            <div style={{ padding: '16px' }}>
+              {/* DEBUG: Always visible */}
+              {console.log('📊 DIALOG reportData:', reportData)}
+              {console.log('📊 leaseRevenue:', reportData?.leaseRevenue)}
+              {console.log('📊 leaseRevenue.leaseItems:', reportData?.leaseRevenue?.leaseItems)}
+              {console.log('📊 creditCardRevenue:', reportData?.creditCardRevenue)}
+              {console.log('📊 creditCardRevenue.transactionItems:', reportData?.creditCardRevenue?.transactionItems)}
+              <div style={{ marginBottom: '16px', backgroundColor: '#fff3cd', padding: '12px', borderRadius: '4px' }}>
+                <strong>DEBUG INFO:</strong><br/>
+                leaseRevenue items: {reportData?.leaseRevenue?.leaseItems?.length ?? 'undefined'}<br/>
+                creditCard items: {reportData?.creditCardRevenue?.transactionItems?.length ?? 'undefined'}<br/>
+                charges items: {reportData?.chargesRevenue?.chargeItems?.length ?? 'undefined'}<br/>
+                fixedExpenses items: {reportData?.fixedExpenses?.expenseItems?.length ?? 'undefined'}<br/>
+                leaseExpense items: {reportData?.leaseExpense?.leaseExpenseItems?.length ?? 'undefined'}<br/>
+                otherRevenue: {reportData?.otherRevenue?.length ?? 'undefined'}<br/>
+                oneTimeExpenses: {reportData?.oneTimeExpenses?.length ?? 'undefined'}
+              </div>
+              {/* SUMMARY */}
+              <h2 style={{ marginBottom: '16px', borderBottom: '2px solid #333' }}>Summary</h2>
+              <table style={{ width: '100%', marginBottom: '24px', borderCollapse: 'collapse' }}>
+                <tbody>
+                  <tr><td style={{ padding: '8px', border: '1px solid #ddd' }}>Total Revenue</td><td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right', color: 'green', fontWeight: 'bold' }}>${(reportData?.totalRevenue ?? 0).toFixed(2)}</td></tr>
+                  <tr><td style={{ padding: '8px', border: '1px solid #ddd' }}>Total Expenses</td><td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right', color: 'red', fontWeight: 'bold' }}>-${(reportData?.totalExpenses ?? 0).toFixed(2)}</td></tr>
+                  <tr><td style={{ padding: '8px', border: '1px solid #ddd' }}>Amount Paid</td><td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right', color: 'blue', fontWeight: 'bold' }}>${(reportData?.amountPaid ?? 0).toFixed(2)}</td></tr>
+                  <tr style={{ backgroundColor: (reportData?.amountDue ?? 0) < 0 ? '#ffebee' : '#e8f5e9' }}><td style={{ padding: '8px', border: '1px solid #ddd', fontWeight: 'bold' }}>Amount Due/Owing</td><td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right', fontWeight: 'bold', fontSize: '1.2em' }}>{(reportData?.amountDue ?? 0) < 0 ? `($${Math.abs(reportData?.amountDue ?? 0).toFixed(2)})` : `$${(reportData?.amountDue ?? 0).toFixed(2)}`}</td></tr>
+                </tbody>
+              </table>
+
+              {/* REVENUE DETAILS */}
+              <h2 style={{ marginBottom: '16px', borderBottom: '2px solid green', color: 'green' }}>Revenue Details</h2>
+              
+              {/* Lease Revenue */}
+              <h3 style={{ color: 'green' }}>Lease Revenue (${parseFloat(reportData?.leaseRevenue?.totalRevenue || reportData?.leaseRevenue?.grandTotalLease || 0).toFixed(2)})</h3>
+              {(() => {
+                const items = reportData?.leaseRevenue?.leaseItems || [];
+                if (items.length === 0) return <p style={{ fontStyle: 'italic', color: '#666' }}>No lease revenue items</p>;
+                return (
+                  <table style={{ width: '100%', marginBottom: '16px', borderCollapse: 'collapse' }}>
+                    <thead><tr style={{ backgroundColor: '#f5f5f5' }}><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Date</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Cab</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Shift</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Driver</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Amount</th></tr></thead>
+                    <tbody>{items.map((item, i) => <tr key={i}><td style={{ padding: '8px', border: '1px solid #ddd' }}>{item.shiftDate || '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd' }}>{item.cabNumber || '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd' }}>{item.shiftType || '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd' }}>{item.driverName || '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right', color: 'green' }}>${parseFloat(item.totalLease || 0).toFixed(2)}</td></tr>)}</tbody>
+                  </table>
+                );
+              })()}
+
+              {/* Credit Card Revenue */}
+              <h3 style={{ color: 'green' }}>Credit Card Revenue (${parseFloat(reportData?.creditCardRevenue?.grandTotal || 0).toFixed(2)})</h3>
+              {(() => {
+                const items = reportData?.creditCardRevenue?.transactionItems || [];
+                if (items.length === 0) return <p style={{ fontStyle: 'italic', color: '#666' }}>No credit card transactions</p>;
+                return (
+                  <table style={{ width: '100%', marginBottom: '16px', borderCollapse: 'collapse' }}>
+                    <thead><tr style={{ backgroundColor: '#f5f5f5' }}><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Date</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Cab</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Card</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Amount</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Tip</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Total</th></tr></thead>
+                    <tbody>{items.map((txn, i) => <tr key={i}><td style={{ padding: '8px', border: '1px solid #ddd' }}>{txn.transactionDate || '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd' }}>{txn.cabNumber || '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd' }}>{txn.cardLastFour ? `****${txn.cardLastFour}` : '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>${parseFloat(txn.amount || 0).toFixed(2)}</td><td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>${parseFloat(txn.tipAmount || 0).toFixed(2)}</td><td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right', color: 'green' }}>${parseFloat(txn.totalAmount || 0).toFixed(2)}</td></tr>)}</tbody>
+                  </table>
+                );
+              })()}
+
+              {/* Charges Revenue */}
+              <h3 style={{ color: 'green' }}>Charges Revenue (${parseFloat(reportData?.chargesRevenue?.grandTotal || 0).toFixed(2)})</h3>
+              {(() => {
+                const items = reportData?.chargesRevenue?.chargeItems || [];
+                if (items.length === 0) return <p style={{ fontStyle: 'italic', color: '#666' }}>No charges</p>;
+                return (
+                  <table style={{ width: '100%', marginBottom: '16px', borderCollapse: 'collapse' }}>
+                    <thead><tr style={{ backgroundColor: '#f5f5f5' }}>
+                      <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Date</th>
+                      <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Account</th>
+                      <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Pickup</th>
+                      <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Dropoff</th>
+                      <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Fare</th>
+                      <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Tip</th>
+                      <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Total</th>
+                    </tr></thead>
+                    <tbody>{items.map((c, i) => <tr key={i}>
+                      <td style={{ padding: '8px', border: '1px solid #ddd' }}>{c.tripDate || '-'}</td>
+                      <td style={{ padding: '8px', border: '1px solid #ddd' }}>{c.accountId || '-'}</td>
+                      <td style={{ padding: '8px', border: '1px solid #ddd', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.pickupAddress || '-'}</td>
+                      <td style={{ padding: '8px', border: '1px solid #ddd', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.dropoffAddress || '-'}</td>
+                      <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>${parseFloat(c.fareAmount || 0).toFixed(2)}</td>
+                      <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>${parseFloat(c.tipAmount || 0).toFixed(2)}</td>
+                      <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right', color: 'green', fontWeight: 'bold' }}>${parseFloat(c.totalAmount || 0).toFixed(2)}</td>
+                    </tr>)}</tbody>
+                  </table>
+                );
+              })()}
+
+              {/* Other Revenue */}
+              {Array.isArray(reportData?.otherRevenue) && reportData.otherRevenue.length > 0 && (
+                <>
+                  <h3 style={{ color: 'green' }}>Other Revenue (${reportData.otherRevenue.reduce((sum, r) => sum + parseFloat(r?.amount || 0), 0).toFixed(2)})</h3>
+                  <table style={{ width: '100%', marginBottom: '16px', borderCollapse: 'collapse' }}>
+                    <thead><tr style={{ backgroundColor: '#f5f5f5' }}><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Date</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Category</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Type</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Amount</th></tr></thead>
+                    <tbody>{reportData.otherRevenue.map((r, i) => <tr key={i}><td style={{ padding: '8px', border: '1px solid #ddd' }}>{r?.revenueDate || '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd' }}>{r?.categoryName || '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd' }}>{r?.revenueType || '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right', color: 'green' }}>${parseFloat(r?.amount || 0).toFixed(2)}</td></tr>)}</tbody>
+                  </table>
+                </>
+              )}
+
+              {/* EXPENSE DETAILS */}
+              <h2 style={{ marginTop: '24px', marginBottom: '16px', borderBottom: '2px solid red', color: 'red' }}>Expense Details</h2>
+              
+              {/* Fixed Expenses */}
+              <h3 style={{ color: 'red' }}>Fixed Expenses (${parseFloat(reportData?.fixedExpenses?.totalAmount || reportData?.fixedExpenses?.totalExpenses || 0).toFixed(2)})</h3>
+              {(() => {
+                const items = reportData?.fixedExpenses?.expenseItems || [];
+                if (items.length === 0) return <p style={{ fontStyle: 'italic', color: '#666' }}>No fixed expenses</p>;
+                return (
+                  <table style={{ width: '100%', marginBottom: '16px', borderCollapse: 'collapse' }}>
+                    <thead><tr style={{ backgroundColor: '#f5f5f5' }}><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Date</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Category</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Description</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Amount</th></tr></thead>
+                    <tbody>{items.map((e, i) => <tr key={i}><td style={{ padding: '8px', border: '1px solid #ddd' }}>{e.expenseDate || e.date || '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd' }}>{e.categoryName || '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd' }}>{e.description || '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right', color: 'red' }}>${parseFloat(e.amount || e.chargedAmount || 0).toFixed(2)}</td></tr>)}</tbody>
+                  </table>
+                );
+              })()}
+
+              {/* Lease Expenses */}
+              <h3 style={{ color: 'red' }}>Lease Expenses (${parseFloat(reportData?.leaseExpense?.grandTotalLease || reportData?.leaseExpense?.totalLeaseExpense || 0).toFixed(2)})</h3>
+              {(() => {
+                const items = reportData?.leaseExpense?.leaseExpenseItems || [];
+                if (items.length === 0) return <p style={{ fontStyle: 'italic', color: '#666' }}>No lease expenses</p>;
+                return (
+                  <table style={{ width: '100%', marginBottom: '16px', borderCollapse: 'collapse' }}>
+                    <thead><tr style={{ backgroundColor: '#f5f5f5' }}>
+                      <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Date</th>
+                      <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Cab</th>
+                      <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Shift</th>
+                      <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Base Rate</th>
+                      <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Mileage Rate</th>
+                      <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Mileage</th>
+                      <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Mileage Lease</th>
+                      <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Total Lease</th>
+                    </tr></thead>
+                    <tbody>{items.map((e, i) => <tr key={i}>
+                      <td style={{ padding: '8px', border: '1px solid #ddd' }}>{e.shiftDate || '-'}</td>
+                      <td style={{ padding: '8px', border: '1px solid #ddd' }}>{e.cabNumber || '-'}</td>
+                      <td style={{ padding: '8px', border: '1px solid #ddd' }}>{e.shiftType || '-'}</td>
+                      <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>${parseFloat(e.baseRate || 0).toFixed(2)}</td>
+                      <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>${parseFloat(e.mileageRate || 0).toFixed(2)}</td>
+                      <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>{parseFloat(e.miles || 0).toFixed(0)}</td>
+                      <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>${parseFloat(e.mileageLease || 0).toFixed(2)}</td>
+                      <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right', color: 'red', fontWeight: 'bold' }}>${parseFloat(e.totalLease || 0).toFixed(2)}</td>
+                    </tr>)}</tbody>
+                  </table>
+                );
+              })()}
+
+              {/* One-Time Expenses */}
+              {Array.isArray(reportData?.oneTimeExpenses) && reportData.oneTimeExpenses.length > 0 && (
+                <>
+                  <h3 style={{ color: 'red' }}>One-Time Expenses (${reportData.oneTimeExpenses.reduce((sum, e) => sum + parseFloat(e?.amount ?? e?.chargedAmount ?? 0), 0).toFixed(2)})</h3>
+                  <table style={{ width: '100%', marginBottom: '16px', borderCollapse: 'collapse' }}>
+                    <thead><tr style={{ backgroundColor: '#f5f5f5' }}><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Date</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Category</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Description</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Amount</th></tr></thead>
+                    <tbody>{reportData.oneTimeExpenses.map((e, i) => <tr key={i}><td style={{ padding: '8px', border: '1px solid #ddd' }}>{e?.expenseDate || e?.date || '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd' }}>{e?.categoryName || '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd' }}>{e?.description || '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right', color: 'red' }}>${parseFloat(e?.amount ?? e?.chargedAmount ?? 0).toFixed(2)}</td></tr>)}</tbody>
+                  </table>
+                </>
+              )}
+            </div>
           )}
         </DialogContent>
 

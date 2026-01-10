@@ -64,6 +64,8 @@ export default function CabsPage() {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [airportFilter, setAirportFilter] = useState("ALL");
+  const [shareTypeFilter, setShareTypeFilter] = useState("ALL");
+  const [shiftTypeFilter, setShiftTypeFilter] = useState("ALL");
   
   // Form data
   const [formData, setFormData] = useState({
@@ -73,6 +75,8 @@ export default function CabsPage() {
     year: "",
     color: "",
     cabType: "SEDAN",
+    shareType: "",
+    cabShiftType: "",
     hasAirportLicense: false,
     airportLicenseNumber: "",
     airportLicenseExpiry: "",
@@ -102,7 +106,7 @@ export default function CabsPage() {
   // Filter cabs whenever search/filter changes
   useEffect(() => {
     filterCabs();
-  }, [searchTerm, statusFilter, typeFilter, airportFilter, cabs]);
+  }, [searchTerm, statusFilter, typeFilter, airportFilter, shareTypeFilter, shiftTypeFilter, cabs]);
 
   const loadCabs = async () => {
     try {
@@ -168,6 +172,16 @@ export default function CabsPage() {
       filtered = filtered.filter((cab) => !cab.hasAirportLicense);
     }
 
+    // Filter by share type
+    if (shareTypeFilter !== "ALL") {
+      filtered = filtered.filter((cab) => cab.shareType === shareTypeFilter);
+    }
+
+    // Filter by shift type
+    if (shiftTypeFilter !== "ALL") {
+      filtered = filtered.filter((cab) => cab.cabShiftType === shiftTypeFilter);
+    }
+
     setFilteredCabs(filtered);
   };
 
@@ -183,6 +197,8 @@ export default function CabsPage() {
         year: cab.year || "",
         color: cab.color || "",
         cabType: cab.cabType || "SEDAN",
+        shareType: cab.shareType || "",
+        cabShiftType: cab.cabShiftType || "",
         hasAirportLicense: cab.hasAirportLicense || false,
         airportLicenseNumber: cab.airportLicenseNumber || "",
         airportLicenseExpiry: cab.airportLicenseExpiry || "",
@@ -199,6 +215,8 @@ export default function CabsPage() {
         year: "",
         color: "",
         cabType: "SEDAN",
+        shareType: "",
+        cabShiftType: "",
         hasAirportLicense: false,
         airportLicenseNumber: "",
         airportLicenseExpiry: "",
@@ -221,6 +239,8 @@ export default function CabsPage() {
       year: "",
       color: "",
       cabType: "SEDAN",
+      shareType: "",
+      cabShiftType: "",
       hasAirportLicense: false,
       airportLicenseNumber: "",
       airportLicenseExpiry: "",
@@ -313,7 +333,7 @@ export default function CabsPage() {
     );
   }
 
-  const hasActiveFilters = searchTerm || statusFilter !== "ALL" || typeFilter !== "ALL" || airportFilter !== "ALL";
+  const hasActiveFilters = searchTerm || statusFilter !== "ALL" || typeFilter !== "ALL" || airportFilter !== "ALL" || shareTypeFilter !== "ALL" || shiftTypeFilter !== "ALL";
   const canEdit = ["ADMIN", "MANAGER"].includes(currentUser.role);
 
   return (
@@ -437,6 +457,32 @@ export default function CabsPage() {
               </Select>
             </FormControl>
 
+            <FormControl size="small" sx={{ minWidth: 150 }}>
+              <InputLabel>Share Type</InputLabel>
+              <Select
+                value={shareTypeFilter}
+                label="Share Type"
+                onChange={(e) => setShareTypeFilter(e.target.value)}
+              >
+                <MenuItem value="ALL">All</MenuItem>
+                <MenuItem value="VOTING_SHARE">Voting Share</MenuItem>
+                <MenuItem value="NON_VOTING_SHARE">Non-Voting Share</MenuItem>
+              </Select>
+            </FormControl>
+
+            <FormControl size="small" sx={{ minWidth: 150 }}>
+              <InputLabel>Shift Type</InputLabel>
+              <Select
+                value={shiftTypeFilter}
+                label="Shift Type"
+                onChange={(e) => setShiftTypeFilter(e.target.value)}
+              >
+                <MenuItem value="ALL">All</MenuItem>
+                <MenuItem value="SINGLE">Single</MenuItem>
+                <MenuItem value="DOUBLE">Double</MenuItem>
+              </Select>
+            </FormControl>
+
             {hasActiveFilters && (
               <Button
                 variant="outlined"
@@ -445,6 +491,8 @@ export default function CabsPage() {
                   setStatusFilter("ALL");
                   setTypeFilter("ALL");
                   setAirportFilter("ALL");
+                  setShareTypeFilter("ALL");
+                  setShiftTypeFilter("ALL");
                 }}
               >
                 Clear Filters
@@ -481,6 +529,8 @@ export default function CabsPage() {
                 <TableCell><strong>Registration</strong></TableCell>
                 <TableCell><strong>Vehicle</strong></TableCell>
                 <TableCell><strong>Type</strong></TableCell>
+                <TableCell><strong>Share Type</strong></TableCell>
+                <TableCell><strong>Shift Type</strong></TableCell>
                 <TableCell><strong>Airport</strong></TableCell>
                 <TableCell><strong>Status</strong></TableCell>
                 {canEdit && <TableCell align="center"><strong>Actions</strong></TableCell>}
@@ -489,13 +539,13 @@ export default function CabsPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={canEdit ? 7 : 6} align="center">
+                  <TableCell colSpan={canEdit ? 9 : 8} align="center">
                     Loading cabs...
                   </TableCell>
                 </TableRow>
               ) : filteredCabs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={canEdit ? 7 : 6} align="center">
+                  <TableCell colSpan={canEdit ? 9 : 8} align="center">
                     No cabs found
                   </TableCell>
                 </TableRow>
@@ -528,6 +578,30 @@ export default function CabsPage() {
                         color={getTypeColor(cab.cabType)}
                         size="small"
                       />
+                    </TableCell>
+                    <TableCell>
+                      {cab.shareType ? (
+                        <Chip
+                          label={cab.shareType === "VOTING_SHARE" ? "Voting" : "Non-Voting"}
+                          color={cab.shareType === "VOTING_SHARE" ? "primary" : "default"}
+                          size="small"
+                          variant="outlined"
+                        />
+                      ) : (
+                        <Typography variant="body2" color="textSecondary">-</Typography>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {cab.cabShiftType ? (
+                        <Chip
+                          label={cab.cabShiftType === "SINGLE" ? "Single" : "Double"}
+                          color={cab.cabShiftType === "DOUBLE" ? "secondary" : "default"}
+                          size="small"
+                          variant="outlined"
+                        />
+                      ) : (
+                        <Typography variant="body2" color="textSecondary">-</Typography>
+                      )}
                     </TableCell>
                     <TableCell>
                       {cab.hasAirportLicense ? (
@@ -707,6 +781,36 @@ export default function CabsPage() {
                 >
                   <MenuItem value="SEDAN">Sedan</MenuItem>
                   <MenuItem value="HANDICAP_VAN">Handicap Van</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={6}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Share Type</InputLabel>
+                <Select
+                  value={formData.shareType}
+                  label="Share Type"
+                  onChange={(e) => setFormData({ ...formData, shareType: e.target.value })}
+                >
+                  <MenuItem value="">None</MenuItem>
+                  <MenuItem value="VOTING_SHARE">Voting Share</MenuItem>
+                  <MenuItem value="NON_VOTING_SHARE">Non-Voting Share</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={6}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Shift Type</InputLabel>
+                <Select
+                  value={formData.cabShiftType}
+                  label="Shift Type"
+                  onChange={(e) => setFormData({ ...formData, cabShiftType: e.target.value })}
+                >
+                  <MenuItem value="">None</MenuItem>
+                  <MenuItem value="SINGLE">Single Shift</MenuItem>
+                  <MenuItem value="DOUBLE">Double Shift</MenuItem>
                 </Select>
               </FormControl>
             </Grid>

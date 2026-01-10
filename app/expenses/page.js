@@ -633,9 +633,9 @@ export default function ExpensesRevenuesPage() {
                     {filteredRevenues.map(revenue => (
                       <TableRow key={revenue.id}>
                         <TableCell>{revenue.revenueDate}</TableCell>
-                        <TableCell><Chip label={revenue.category?.categoryName} size="small" color="success" /></TableCell>
+                        <TableCell><Chip label={revenue.categoryName} size="small" color="success" /></TableCell>
                         <TableCell><Chip label={revenue.revenueType} size="small" variant="outlined" color="success" /></TableCell>
-                        <TableCell>{getEntityDisplay(revenue.entityType, revenue.driver?.id || revenue.owner?.id || revenue.cab?.id, revenue.shift?.shiftType, revenue.driver, revenue.owner, revenue.cab)}</TableCell>
+                        <TableCell>{revenue.entityDisplayName || '-'}</TableCell>
                         <TableCell>{revenue.description || "-"}</TableCell>
                         <TableCell><Chip label={revenue.paymentStatus} size="small" color={revenue.paymentStatus === "PAID" ? "success" : "warning"} /></TableCell>
                         <TableCell align="right"><Typography variant="body2" fontWeight="bold" color="success.main">${parseFloat(revenue.amount).toFixed(2)}</Typography></TableCell>
