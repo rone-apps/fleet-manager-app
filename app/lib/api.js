@@ -1,24 +1,64 @@
-// API Configuration for FareFlow Backend
-// Uses relative path '/api' which is proxied to the backend via next.config.js rewrites
-// The proxy destination is configured via NEXT_PUBLIC_API_BASE_URL environment variable
-// This works for both local development and production without hardcoded URLs
-export const API_BASE_URL = '/api';
+// API Configuration for FareFlow Backend with Multi-Backend Support
+// Each company has its own backend instance
 
 /**
- * Get current tenant ID (display ID) from localStorage
+ * Resolve the backend URL for a given company ID
+ * In production, each company gets their own subdomain
+ * In development, each company gets a different port
  */
-export function getTenantId() {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('tenantId');
+function resolveBackendUrl(companyId) {
+  if (!companyId) {
+    throw new Error('Company ID is required');
+  }
+
+  const normalizedId = companyId.toLowerCase().trim();
+  
+  // Production: use subdomain pattern
+  if (process.env.NODE_ENV === 'production') {
+    const apiPattern = process.env.NEXT_PUBLIC_API_URL_PATTERN || 
+                      'https://api-{company}.fareflow.com';
+    return apiPattern.replace('{company}', normalizedId);
+  }
+  
+  // Development: use port mapping
+  // You can configure specific URLs via environment variables
+  const envKey = `NEXT_PUBLIC_API_${normalizedId.toUpperCase()}`;
+  const specificUrl = process.env[envKey];
+  
+  if (specificUrl) {
+    return specificUrl;
+  }
+  
+  // Default port pattern for development (you can adjust these)
+  const devPorts = {
+    'bonnys': 8081,
+    'bonny': 8081,
+    'maclures': 8082,
+    'mac-cabs': 8082,
+  };
+  
+  const port = devPorts[normalizedId] || 8080;
+  return `http://localhost:${port}/api`;
 }
 
 /**
- * Get current tenant schema (database name) from localStorage
+ * Get the API base URL for the current company
  */
-export function getTenantSchema() {
+export function getApiBaseUrl() {
   if (typeof window === 'undefined') return null;
-  // Fall back to tenantId for backwards compatibility
-  return localStorage.getItem('tenantSchema') || localStorage.getItem('tenantId');
+  
+  const companyId = localStorage.getItem('companyId');
+  if (!companyId) return null;
+  
+  return resolveBackendUrl(companyId);
+}
+
+/**
+ * Get current company ID from localStorage
+ */
+export function getCompanyId() {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('companyId');
 }
 
 /**
@@ -38,7 +78,7 @@ function handleAuthError() {
     sessionStorage.clear();
     // Clear cookies
     document.cookie = 'token=; path=/; max-age=0; SameSite=Strict';
-    document.cookie = 'tenantId=; path=/; max-age=0; SameSite=Strict';
+    document.cookie = 'companyId=; path=/; max-age=0; SameSite=Strict';
     // Use replace to prevent back button from returning to authenticated pages
     window.location.replace('/signin');
   }
@@ -67,7 +107,7 @@ function validateToken() {
 
 /**
  * Make authenticated API request with automatic token validation and error handling
- * Includes tenant schema header for multi-tenancy support (database switching)
+ * Routes to the correct backend based on the stored company ID
  */
 export async function apiRequest(endpoint, options = {}) {
   // Validate token before making request
@@ -76,20 +116,23 @@ export async function apiRequest(endpoint, options = {}) {
   }
 
   const token = localStorage.getItem('token');
-  const tenantSchema = getTenantSchema(); // Use schema name for DB switching
+  const apiBaseUrl = getApiBaseUrl();
+  
+  if (!apiBaseUrl) {
+    throw new Error('Company information not found. Please login again.');
+  }
   
   const config = {
     ...options,
     headers: {
       'Content-Type': 'application/json',
       ...(token && { 'Authorization': `Bearer ${token}` }),
-      ...(tenantSchema && { 'X-Tenant-ID': tenantSchema }), // Schema name goes to backend
       ...options.headers,
     },
   };
 
   try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+    const response = await fetch(`${apiBaseUrl}${endpoint}`, config);
 
     // Handle 401 Unauthorized - token expired or invalid
     if (response.status === 401) {
@@ -114,6 +157,53 @@ export async function apiRequest(endpoint, options = {}) {
 }
 
 /**
+ * Make a login request to a specific company's backend
+ * This is used during login before we have a stored company ID
+ */
+export async function loginRequest(companyId, username, password) {
+  const apiBaseUrl = resolveBackendUrl(companyId);
+  
+  try {
+    const response = await fetch(`${apiBaseUrl}/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ username, password }),
+    });
+
+    return response;
+  } catch (error) {
+    if (error.message === 'Failed to fetch' || error.message.includes('NetworkError')) {
+      throw new Error('Unable to connect to server. Invalid company ID or service unavailable.');
+    }
+    throw error;
+  }
+}
+
+/**
+ * Health check for a specific company's backend
+ * Returns true if the backend is reachable
+ */
+export async function healthCheck(companyId) {
+  try {
+    const apiBaseUrl = resolveBackendUrl(companyId);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+    
+    const response = await fetch(`${apiBaseUrl}/actuator/health`, {
+      method: 'GET',
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Get current user from localStorage
  */
 export function getCurrentUser() {
@@ -128,7 +218,7 @@ export function getCurrentUser() {
  */
 export function isAuthenticated() {
   if (typeof window === 'undefined') return false;
-  return !!localStorage.getItem('token');
+  return !!localStorage.getItem('token') && !!localStorage.getItem('companyId');
 }
 
 /**
@@ -140,7 +230,7 @@ export function logout() {
     sessionStorage.clear();
     // Clear cookies
     document.cookie = 'token=; path=/; max-age=0; SameSite=Strict';
-    document.cookie = 'tenantId=; path=/; max-age=0; SameSite=Strict';
+    document.cookie = 'companyId=; path=/; max-age=0; SameSite=Strict';
     // Redirect to homepage instead of signin - user will see the landing page
     window.location.replace('/');
   }
@@ -160,16 +250,14 @@ export function isTokenExpired(token) {
 }
 
 /**
- * Get standard headers for authenticated requests with tenant support
+ * Get standard headers for authenticated requests
  * Use this when you need to make direct fetch calls instead of using apiRequest
  */
 export function getAuthHeaders(contentType = 'application/json') {
   const token = localStorage.getItem('token');
-  const tenantSchema = getTenantSchema();
   
   const headers = {
     ...(token && { 'Authorization': `Bearer ${token}` }),
-    ...(tenantSchema && { 'X-Tenant-ID': tenantSchema }),
   };
   
   if (contentType) {
@@ -180,13 +268,17 @@ export function getAuthHeaders(contentType = 'application/json') {
 }
 
 /**
- * Tenant-aware fetch wrapper
+ * Company-aware fetch wrapper
  * Use this as a drop-in replacement for fetch() when making authenticated API calls
- * Automatically includes Authorization and X-Tenant-ID headers
+ * Automatically includes Authorization header and routes to correct backend
  */
-export async function tenantFetch(url, options = {}) {
+export async function companyFetch(endpoint, options = {}) {
   const token = localStorage.getItem('token');
-  const tenantSchema = getTenantSchema();
+  const apiBaseUrl = getApiBaseUrl();
+  
+  if (!apiBaseUrl) {
+    throw new Error('Company information not found. Please login again.');
+  }
   
   // Don't set Content-Type for FormData (let browser set it with boundary)
   const isFormData = options.body instanceof FormData;
@@ -195,11 +287,16 @@ export async function tenantFetch(url, options = {}) {
     ...options,
     headers: {
       ...(token && { 'Authorization': `Bearer ${token}` }),
-      ...(tenantSchema && { 'X-Tenant-ID': tenantSchema }),
       ...(!isFormData && { 'Content-Type': 'application/json' }),
       ...options.headers,
     },
   };
   
-  return fetch(url, config);
+  return fetch(`${apiBaseUrl}${endpoint}`, config);
 }
+
+// Backwards compatibility - keep old function names
+export const tenantFetch = companyFetch;
+export const getTenantId = getCompanyId;
+export const getTenantSchema = getCompanyId;
+export const API_BASE_URL = '/api'; // Kept for backwards compatibility, but not used with new system
