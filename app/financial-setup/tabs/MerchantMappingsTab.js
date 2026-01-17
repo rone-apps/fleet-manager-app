@@ -4,7 +4,7 @@ import {
   TableContainer, TableHead, TableRow, Dialog, DialogTitle,
   DialogContent, DialogActions, TextField, FormControl,
   InputLabel, Select, MenuItem, IconButton, Chip,
-  Autocomplete, Tooltip, Alert, AlertTitle,
+  Autocomplete, Tooltip, Alert, AlertTitle, CircularProgress,
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -27,6 +27,7 @@ export default function MerchantMappingsTab({
   const [merchant2CabMappings, setMerchant2CabMappings] = useState([]);
   const [allCabs, setAllCabs] = useState([]);
   const [showActiveMappingsOnly, setShowActiveMappingsOnly] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   // Create/Edit Dialog
   const [openMerchantMappingDialog, setOpenMerchantMappingDialog] = useState(false);
@@ -74,6 +75,7 @@ export default function MerchantMappingsTab({
   };
 
   const loadMerchant2CabMappings = async () => {
+    setLoading(true);
     try {
       const endpoint = showActiveMappingsOnly
         ? `${API_BASE_URL}/financial/merchant2cab/active`
@@ -94,6 +96,8 @@ export default function MerchantMappingsTab({
       }
     } catch (err) {
       console.error("Error loading merchant2cab mappings:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -271,7 +275,13 @@ export default function MerchantMappingsTab({
             </TableRow>
           </TableHead>
           <TableBody>
-            {merchant2CabMappings.length === 0 ? (
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={10} align="center" sx={{ py: 4 }}>
+                  <CircularProgress />
+                </TableCell>
+              </TableRow>
+            ) : merchant2CabMappings.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={10} align="center" sx={{ py: 4 }}>
                   <Typography color="text.secondary">
