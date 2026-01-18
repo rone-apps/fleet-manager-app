@@ -24,7 +24,7 @@ import {
 } from "@mui/icons-material";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { useRouter } from "next/navigation";
-import { loginRequest, healthCheck } from '../lib/api';
+import { loginRequest } from '../lib/api';
 
 const theme = createTheme({
   palette: {
@@ -72,15 +72,6 @@ export default function SignInPage() {
     }
 
     try {
-      // Optional: Check if backend is reachable
-      // Comment this out if you don't want the health check delay
-      const isHealthy = await healthCheck(companyId);
-      if (!isHealthy) {
-        setError("Invalid company ID, username, or password");
-        setLoading(false);
-        return;
-      }
-
       // Attempt login with the specific company's backend
       const response = await loginRequest(companyId, username, password);
 
@@ -115,11 +106,7 @@ export default function SignInPage() {
     } catch (err) {
       console.error("Login error:", err);
       // Generic error message
-      if (err.message.includes('service unavailable') || err.message.includes('Unable to connect')) {
-        setError("Invalid company ID, username, or password");
-      } else {
-        setError("Unable to connect to server. Please try again.");
-      }
+      setError("Unable to connect to server. Please check your company ID and try again.");
     } finally {
       setLoading(false);
     }
